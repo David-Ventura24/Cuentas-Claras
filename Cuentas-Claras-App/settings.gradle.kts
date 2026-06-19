@@ -2,26 +2,28 @@ pluginManagement {
     repositories {
         google {
             content {
-                includeGroupByRegex("com\\.android.*")
-                includeGroupByRegex("com\\.google.*")
-                includeGroupByRegex("androidx.*")
+                includeGroupAndSubgroups("com.android")
+                includeGroupAndSubgroups("com.google")
+                includeGroupAndSubgroups("androidx")
             }
         }
         mavenCentral()
         gradlePluginPortal()
     }
 }
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
-}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+
+
+        maven { url = java.net.URI("https://androidx.dev/storage/compose-compiler/repository") }
+
+        maven { url = java.net.URI("https://oss.sonatype.org/content/repositories/snapshots/") }
     }
 }
 
-rootProject.name = "Cuentas-ClarasApp"
+rootProject.name = "Cuentas-Claras-App"
 include(":app")
- 
