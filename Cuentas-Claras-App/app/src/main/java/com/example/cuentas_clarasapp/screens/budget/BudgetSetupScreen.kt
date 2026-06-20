@@ -1,13 +1,15 @@
 package com.example.cuentas_clarasapp.screens.budget
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,45 +20,68 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
+import com.example.cuentas_clarasapp.navigation.Routes
+import java.util.Locale
 
-private val Purple     = Color(0xFF985EFF)
-private val BgDark     = Color(0xFF111013)
-private val BgCard     = Color(0xFF1A1820)
-private val TextMuted  = Color(0x4DFFFFFF)
-private val TextDim    = Color(0x2AFFFFFF)
+private val Purple = Color(0xFF985EFF)
+private val BgDark = Color(0xFF111013)
+private val BgCard = Color(0xFF1A1820)
+private val TextMuted = Color(0x4DFFFFFF)
+private val GreenSuccess = Color(0xFF4CAF50)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetSetupScreen(
     navController: NavController,
-    viewModel: BudgetSetupViewModel
+    viewModel: BudgetSetupViewModel,
+    saldoActualHome: Float,
+    periodoActualHome: String,
+    ahorroActualHome: Float,
+    onPresupuestoGuardado: (Double, String, Double) -> Unit
 ) {
-    // Escucha de forma segura los cambios en el flujo de estado de la operación (Loading/Success/Error)
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    // Efecto de escucha: Si el backend responde exitosamente, saca la pantalla del Backstack
-    LaunchedEffect(uiState) {
-        if (uiState is BudgetSetupUiState.Success) {
-            navController.popBackStack()
-        }
+    var montoInput by remember {
+        mutableStateOf(if (saldoActualHome > 0f) saldoActualHome.toString() else "")
     }
+
+    var periodoSeleccionado by remember {
+        mutableStateOf(if (periodoActualHome != "Sin configurar") periodoActualHome else "Mensual")
+    }
+
+    var porcentajeAhorro by remember {
+        mutableStateOf(if (ahorroActualHome > 0f) ahorroActualHome else 10f)
+    }
+
+    var mostrarExito by remember { mutableStateOf(false) }
+
+    // --- CÁLCULOS MATEMÁTICOS PARA LA PROYECCIÓN DINÁMICA ---
+    val montoActual = montoInput.toDoubleOrNull() ?: 0.0
+    val montoAhorroDolares = montoActual * (porcentajeAhorro / 100.0)
+    val saldoDisponibleDespuesAhorro = (montoActual - montoAhorroDolares).coerceAtLeast(0.0)
+    val diasPeriodo = if (periodoSeleccionado == "Mensual") 30 else 7
+    val gastoDiarioProyectado = if (montoActual > 0.0) saldoDisponibleDespuesAhorro / diasPeriodo else 0.0
 
     Scaffold(
         containerColor = BgDark,
         topBar = {
             TopAppBar(
-                title = { Text("Configurar Presupuesto", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Regresar", tint = Color.White)
-                    }
+                title = {
+                    Text(
+                        text = "Configurar Presupuesto",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BgDark)
             )
+        },
+        bottomBar = {
+            CuentasClarasBottomNav(navController = navController)
         }
     ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -65,61 +90,130 @@ fun BudgetSetupScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-            // 1. SELECCIÓN DE PERÍODO (Mensual / Semanal)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("¿Cada cuánto recibes tu dinero?", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            if (mostrarExito) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(GreenSuccess.copy(alpha = 0.15f))
+                        .border(1.dp, GreenSuccess, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "Éxito", tint = GreenSuccess)
+                    Text(
+                        text = "¡Presupuesto guardado exitosamente!",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // =========================================================
+            // 1. INPUT DEL MONTO TOTAL
+            // =========================================================
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgCard)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Monto Total Disponible",
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                OutlinedTextField(
+                    value = montoInput,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            montoInput = newValue
+                        }
+                    },
+                    placeholder = { Text("Ej: 100.00", color = Color.White.copy(alpha = 0.2f)) },
+                    prefix = { Text("$ ", color = Purple, fontWeight = FontWeight.Bold) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Purple,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                        focusedContainerColor = BgDark.copy(alpha = 0.5f),
+                        unfocusedContainerColor = BgDark.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            // =========================================================
+            // 2. SELECTOR DE PERIODO (MENSUAL / SEMANAL)
+            // =========================================================
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(BgCard)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Periodo del Ciclo",
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    listOf("Mensual", "Semanal").forEach { periodo ->
-                        val esSeleccionado = viewModel.periodoSeleccionado == periodo
-                        Button(
-                            onClick = { viewModel.onPeriodoChanged(periodo) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (esSeleccionado) Purple else BgCard,
-                                contentColor = if (esSeleccionado) Color.White else Color.White.copy(alpha = 0.6f)
-                            )
+                    val opciones = listOf("Mensual", "Semanal")
+                    opciones.forEach { opcion ->
+                        val seleccionado = periodoSeleccionado == opcion
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (seleccionado) Purple else BgDark.copy(alpha = 0.5f))
+                                .border(
+                                    width = if (seleccionado) 0.dp else 1.dp,
+                                    color = Color.White.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .clickable { periodoSeleccionado = opcion },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(periodo, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                text = opcion,
+                                color = if (seleccionado) Color.White else Color.White.copy(alpha = 0.6f),
+                                fontSize = 14.sp,
+                                fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal
+                            )
                         }
                     }
                 }
             }
 
-            // 2. INPUT DE MONTO TOTAL (Conexión directa al ViewModel)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Monto total del presupuesto", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                OutlinedTextField(
-                    value = viewModel.montoInput,
-                    onValueChange = { viewModel.onMontoChanged(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("0.00", color = TextDim) },
-                    prefix = { Text("$ ", color = Color.White, fontWeight = FontWeight.Bold) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = BgCard,
-                        unfocusedContainerColor = BgCard,
-                        focusedBorderColor = Purple,
-                        unfocusedBorderColor = Color.Transparent
-                    )
-                )
-            }
-
-            // 3. SLIDER INTERACTIVO DE PORCENTAJE DE AHORRO (Tope máximo 30%)
+            // =========================================================
+            // 3. BARRA DE RETENCIÓN DE AHORRO (LIMITADA DE 0% A 30%)
+            // =========================================================
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(20.dp))
                     .background(BgCard)
-                    .padding(16.dp),
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
@@ -127,107 +221,133 @@ fun BudgetSetupScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Meta de ahorro", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        text = "${viewModel.porcentajeAhorro.toInt()}%",
+                        text = "Porcentaje de Ahorro",
+                        color = TextMuted,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "${porcentajeAhorro.toInt()}%",
                         color = Purple,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Text(
-                    text = "Dinero destinado a guardarse automáticamente.",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-
                 Slider(
-                    value = viewModel.porcentajeAhorro,
-                    onValueChange = { viewModel.onPorcentajeAhorroChanged(it) },
+                    value = porcentajeAhorro,
+                    onValueChange = { porcentajeAhorro = it },
                     valueRange = 0f..30f,
                     steps = 5,
                     colors = SliderDefaults.colors(
                         thumbColor = Purple,
                         activeTrackColor = Purple,
                         inactiveTrackColor = Color.White.copy(alpha = 0.08f)
-                    )
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            // =========================================================
+            // 4. BLOQUES DE PROYECCIÓN EN GRANDE
+            // =========================================================
+            if (montoActual > 0.0) {
+                // Tarjeta 1: Dinero real que queda libre para gastar
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(BgCard)
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text("Monto ahorrado:", color = TextMuted, fontSize = 12.sp)
-                    Text("$${"%.2f".format(viewModel.montoAhorro)}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = "DINERO DISPONIBLE PARA GASTOS",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        // CORREGIDO: Comillas limpias sin barras invertidas
+                        text = "$${String.format(Locale.getDefault(), "%.2f", saldoDisponibleDespuesAhorro)}",
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Tarjeta 2: Límite diario calculado en vivo
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(BgCard)
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "LÍMITE DIARIO ESTIMADO",
+                        color = Purple,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        // CORREGIDO: Comillas limpias sin barras invertidas
+                        text = "$${String.format(Locale.getDefault(), "%.2f", gastoDiarioProyectado)}",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Basado en un ciclo de $diasPeriodo días",
+                        color = Color.White.copy(alpha = 0.3f),
+                        fontSize = 11.sp
+                    )
                 }
             }
 
-            // 4. DISPLAY DEL LÍMITE DIARIO (¡Ahora sí se actualiza en vivo!)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(BgCard)
-                    .padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Gasto diario sugerido".uppercase(),
-                    color = Purple.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
-                    letterSpacing = 0.8.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "$${"%.2f".format(viewModel.limiteDiarioSugerido)}",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Basado en un saldo disponible de $${"%.2f".format(viewModel.saldoDisponibleParaGasto)} para ${viewModel.diasPeriodo} días.",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 5. BOTÓN DE GUARDADO (Comentado y estructurado con lógica asíncrona)
+            // =========================================================
+            // BOTÓN DE ACCIÓN: GUARDAR PRESUPUESTO
+            // =========================================================
             Button(
                 onClick = {
-                    // ===========================================================================================
-                    // LOGICA DE GUARDADO COMENTADA
-                    // ===========================================================================================
-                    // El botón llama al método del ViewModel pasándole una función lambda vacía corporativa.
-                    // Dentro del ViewModel se procesará el almacenamiento local (Room) y remoto (Supabase / Node).
-                    // Una vez completada la escritura con éxito, el LaunchedEffect de arriba sacará de forma
-                    // automática esta pantalla devolviendo al usuario al HomeScreen con sus datos frescos.
-                    // ===========================================================================================
-
-                    viewModel.guardarPresupuesto(onGastoGuardadoExitosamente = {})
+                    if (montoActual > 0.0) {
+                        onPresupuestoGuardado(
+                            montoActual,
+                            periodoSeleccionado,
+                            porcentajeAhorro.toDouble()
+                        )
+                        mostrarExito = true
+                        navController.navigate(Routes.Home) {
+                            popUpTo(Routes.Home) { inclusive = true }
+                        }
+                    }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .padding(bottom = 8.dp),
-                // Se deshabilita si el presupuesto es cero o si ya se está ejecutando la llamada en segundo plano
-                enabled = viewModel.presupuestoTotal > 0f && uiState !is BudgetSetupUiState.Loading,
-                shape = RoundedCornerShape(12.dp),
+                enabled = montoInput.isNotEmpty() && montoActual > 0.0,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Purple,
-                    disabledContainerColor = BgCard
-                )
+                    disabledContainerColor = Color.White.copy(alpha = 0.04f),
+                    contentColor = Color.White,
+                    disabledContentColor = Color.White.copy(alpha = 0.2f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                if (uiState is BudgetSetupUiState.Loading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Guardar Presupuesto", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
+                Text(
+                    text = "Guardar Presupuesto",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
