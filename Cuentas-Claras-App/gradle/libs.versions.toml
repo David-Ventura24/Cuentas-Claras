@@ -14,6 +14,7 @@ ktor = "3.0.1"
 room = "2.6.1"
 ksp = "2.1.0-1.0.29"
 coil = "3.0.4"
+visionInternalVkp = "18.2.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -48,6 +49,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 # Coil 3
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
+vision-internal-vkp = { group = "com.google.mlkit", name = "vision-internal-vkp", version.ref = "visionInternalVkp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

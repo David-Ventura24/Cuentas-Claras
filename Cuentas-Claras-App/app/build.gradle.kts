@@ -75,6 +75,7 @@ dependencies {
     // Room (Base de datos local)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.vision.internal.vkp)
     ksp(libs.androidx.room.compiler)
 
     // Coil 3 (Cargar fotos de comprobantes de gastos vía URL)

@@ -12,8 +12,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Wallet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.cuentas_clarasapp.navigation.Routes
+import com.google.android.libraries.intelligence.acceleration.Analytics
 
 // --- Sistema de Diseño Atmosférico (Colores compartidos) ---
 private val Purple       = Color(0xFF985EFF)
@@ -186,7 +190,7 @@ private fun HomeContent(
                 title = "Gastos recientes",
                 linkText = "Ver historial",
                 onLink = {
-                    // TODO: BACKEND INTEGRATION - Ruteo dinámico al historial extendido
+                    navController.navigate(Routes.History)
                 }
             )
 
@@ -422,7 +426,7 @@ private fun GastoRow(gasto: GastoHome) {
 }
 
 @Composable
-private fun HomeBottomNav(navController: NavController) {
+fun HomeBottomNav(navController: NavController, currentRoute: Routes = Routes.Home) {
     NavigationBar(
         containerColor = BgDark,
         tonalElevation = 0.dp,
@@ -431,16 +435,21 @@ private fun HomeBottomNav(navController: NavController) {
         // Estructura de navegación con ruteo explícito para la pantalla de presupuesto
         val items = listOf(
             Triple("Inicio",      Icons.Outlined.Person, Routes.Home),
-            Triple("Historial",   Icons.Outlined.Person, Routes.Home),
-            Triple("Gráficas",    Icons.Outlined.Person, Routes.Home),
-            Triple("Presupuesto", Icons.Outlined.Person, Routes.Budget), // <-- Ruta conectada
+            Triple("Historial",   Icons.Outlined.DateRange, Routes.History),
+            Triple("Gráficas",    Icons.Outlined.Analytics, Routes.AddExpense),
+            Triple("Presupuesto", Icons.Outlined.Wallet, Routes.Budget),
         )
         items.forEachIndexed { index, (label, icon, route) ->
             NavigationBarItem(
-                selected = index == 0,
+                // Se evalúa dinámicamente según la pantalla activa para iluminar el icono correcto
+                selected = currentRoute == route,
                 onClick = {
-                    if (route != Routes.Home || index == 0) {
-                        navController.navigate(route)
+                    if (currentRoute != route) {
+                        navController.navigate(route) {
+                            popUpTo(Routes.Home) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 },
                 icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) },

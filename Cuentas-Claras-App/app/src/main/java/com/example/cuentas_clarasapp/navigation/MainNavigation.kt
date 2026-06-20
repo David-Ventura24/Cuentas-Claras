@@ -18,6 +18,10 @@ import com.example.cuentas_clarasapp.screens.auth.RegisterScreen
 import com.example.cuentas_clarasapp.screens.home.HomeScreen
 import com.example.cuentas_clarasapp.screens.budget.BudgetSetupScreen
 import com.example.cuentas_clarasapp.screens.budget.BudgetSetupViewModel
+import com.example.cuentas_clarasapp.screens.expense.AddExpenseScreen
+import com.example.cuentas_clarasapp.screens.expense.AddExpenseViewModel
+import com.example.cuentas_clarasapp.screens.history.HistoryScreen
+import com.example.cuentas_clarasapp.screens.history.HistoryViewModel
 
 @Composable
 fun MainNavigation() {
@@ -82,6 +86,20 @@ fun MainNavigation() {
             BudgetSetupScreen(
                 navController = navController,
                 viewModel = budgetSetupViewModel
+            )
+        }
+        composable<Routes.AddExpense> {
+            val addExpenseViewModel: AddExpenseViewModel = viewModel()
+            AddExpenseScreen(
+                navController = navController,
+                viewModel = addExpenseViewModel
+            )
+        }
+        composable<Routes.History> {
+            val historyViewModel: HistoryViewModel = viewModel()
+            HistoryScreen(
+                navController = navController,
+                viewModel = historyViewModel
             )
         }
     }

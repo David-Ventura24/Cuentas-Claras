@@ -18,4 +18,10 @@ sealed class Routes {
 
     @Serializable
     data object Budget : Routes()
+
+    @Serializable
+    data object AddExpense : Routes()
+
+    @Serializable
+    data object History : Routes()
 }
