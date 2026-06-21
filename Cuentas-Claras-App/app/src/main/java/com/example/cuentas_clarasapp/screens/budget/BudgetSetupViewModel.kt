@@ -28,6 +28,9 @@ class BudgetSetupViewModel : ViewModel() {
     var porcentajeAhorro by mutableFloatStateOf(10f)
         private set
 
+    var tienePresupuestoActivo by mutableStateOf(false)
+        private set
+
     // --- PROPIEDADES COMPUTADAS EN TIEMPO REAL ---
     val presupuestoTotal: Float
         get() = montoInput.toFloatOrNull() ?: 0f
@@ -62,6 +65,18 @@ class BudgetSetupViewModel : ViewModel() {
 
     fun onPorcentajeAhorroChanged(nuevoPorcentaje: Float) {
         porcentajeAhorro = nuevoPorcentaje.coerceIn(0f, 30f)
+    }
+
+    /**
+     * Carga un presupuesto ya existente para editarlo.
+     */
+    fun cargarPresupuestoExistente(monto: Float, periodo: String, ahorro: Float) {
+        if (monto > 0f) {
+            montoInput = if (monto % 1.0 == 0.0) monto.toInt().toString() else monto.toString()
+            periodoSeleccionado = if (periodo.isNotBlank()) periodo else "Mensual"
+            porcentajeAhorro = ahorro.coerceIn(0f, 30f)
+            tienePresupuestoActivo = true
+        }
     }
 
     /**

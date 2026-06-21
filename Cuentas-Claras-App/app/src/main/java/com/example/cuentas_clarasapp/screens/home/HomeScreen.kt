@@ -12,75 +12,57 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Wallet
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
 import com.example.cuentas_clarasapp.navigation.Routes
-import com.google.android.libraries.intelligence.acceleration.Analytics
 
-// --- Sistema de Diseño Atmosférico (Colores compartidos) ---
-private val Purple       = Color(0xFF985EFF)
-private val BgDark       = Color(0xFF111013)
-private val BgCard       = Color(0xFF1A1820)
-private val BorderCard   = Color(0x12FFFFFF)
-private val TextMuted    = Color(0x4DFFFFFF)
-private val TextDim      = Color(0x2AFFFFFF)
+// Paleta de colores oficial de Cuentas Claras
+private val Purple = Color(0xFF985EFF)
+private val BgDark = Color(0xFF111013)
+private val BgCard = Color(0xFF1A1820)
+private val TextMuted = Color(0x4DFFFFFF)
+private val GreenProgress = Color(0xFF4CAF50)
 
-/**
- * Determina el color del indicador de progreso en función del dinero consumido.
- * @param spentPct Float que representa la fracción de dinero gastado [0.0f - 1.0f].
- */
-private fun barColor(spentPct: Float): Color = when {
-    spentPct <= 0.50f -> Color(0xFF4ADE80) // Estado Saludable: Verde (Consumido menos del 50%)
-    spentPct <= 0.75f -> Color(0xFFFACC15) // Advertencia Moderada: Amarillo (Consumido entre 50% y 75%)
-    spentPct <= 0.90f -> Color(0xFFFB923C) // Alerta Crítica: Naranja (Consumido entre 75% y 90%)
-    else               -> Color(0xFFF87171) // Límite Superado / Zona de Riesgo: Rojo
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
-    viewModel: HomeViewModel = viewModel()
+    viewModel: HomeViewModel
 ) {
-    // Escucha reactiva del StateFlow expuesto por el ViewModel bajo el ciclo de vida de la UI
+    // Recolectamos el estado reactivo de la arquitectura compartida
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = BgDark,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = {
-                    // TODO: BACKEND INTEGRATION - Vincular con el canal de navegación hacia Routes.AddExpense
-                    // navController.navigate(Routes.AddExpense)
-                },
+                onClick = { navController.navigate(Routes.Budget) },
                 containerColor = Purple,
                 contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(52.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = "Agregar gasto", modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Add, contentDescription = "Configurar Presupuesto")
             }
         },
-        bottomBar = { HomeBottomNav(navController) }
+        bottomBar = {
+            CuentasClarasBottomNav(navController = navController)
+        }
     ) { innerPadding ->
 
-        // Máquina de estados para control de concurrencia y peticiones de red asíncronas
-        when (val state = uiState) {
+        when (uiState) {
             is HomeUiState.Loading -> {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -89,379 +71,304 @@ fun HomeScreen(
                     CircularProgressIndicator(color = Purple)
                 }
             }
-            is HomeUiState.Success -> {
-                HomeContent(
-                    data = state.data,
-                    navController = navController,
-                    innerPadding = innerPadding
-                )
-            }
             is HomeUiState.Error -> {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    modifier = Modifier.fillMaxSize().padding(innerPadding).padding(20.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = state.mensaje, color = Color.Red, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.refrescarContenido() }) {
-                            Text("Reintentar")
-                        }
-                    }
+                    Text(
+                        text = "Ocurrió un error al cargar tus finanzas.",
+                        color = Color.Red,
+                        fontSize = 14.sp
+                    )
                 }
             }
-        }
-    }
-}
+            is HomeUiState.Success -> {
+                val datos = (uiState as HomeUiState.Success).data
 
-// ─────────────────────────────────────────
-// CAPA INTERMEDIA DE PROCESAMIENTO DE DATOS
-// ─────────────────────────────────────────
-@Composable
-private fun HomeContent(
-    data: HomeData,
-    navController: NavController,
-    innerPadding: PaddingValues
-) {
-    val saldoDisponibleActual = data.saldoDisponible.toFloat() // Dinero que el usuario tiene real para gastar
+                // --- PROCESAMIENTO DE TU CONFIGURACIÓN ACTUAL (INTACTO) ---
+                val saldoDisponible = datos.saldoDisponible
+                val limiteDiario = datos.limiteDiarioSugerido
+                val porcentajeAhorro = datos.porcentajeAhorro
+                val periodo = datos.periodoPresupuesto
 
-    // TODO: Extraer 'totalPresupuestoConfigurado' desde la tabla de configuraciones de presupuesto del usuario.
-    val totalPresupuestoConfigurado = 350.00f
+                val gastosConsumidos = 0.0
 
-    // Cálculo correcto de la masa monetaria consumida
-    val budgetSpent = (totalPresupuestoConfigurado - saldoDisponibleActual).coerceAtLeast(0f)
-
-    // Normalización matemática estricta para evitar desbordamientos [0.0f a 1.0f]
-    val budgetSpentPct = if (totalPresupuestoConfigurado > 0f) budgetSpent / totalPresupuestoConfigurado else 0f
-    val budgetRemainingPct = (1f - budgetSpentPct).coerceIn(0f, 1f)
-    val pctLeft = (budgetRemainingPct * 100).toInt()
-
-    // --- SECCIÓN: CÁLCULOS ASOCIADOS AL LÍMITE DIARIO ---
-    val dailySpent = data.ultimosGastos.filter { it.fecha.lowercase().contains("hoy") || it.fecha.lowercase().contains("horas") }
-        .sumOf { it.monto.toDouble() }.toFloat()
-
-    val dailyLimit = data.limiteDiarioSugerido.toFloat()
-
-    val dailySpentPct = if (dailyLimit > 0f) dailySpent / dailyLimit else 0f
-    val dailyRemainingPct = (1f - dailySpentPct).coerceIn(0f, 1f)
-    val dailyPctLeft = (dailyRemainingPct * 100).toInt()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .verticalScroll(rememberScrollState())
-    ) {
-        HomeHeader(userName = data.nombreUsuario)
-
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Renderizado de Tarjeta de Presupuesto con evento de clic inyectado
-            BudgetCard(
-                saldoDisponible = saldoDisponibleActual,
-                spent           = budgetSpent,
-                progressPct     = budgetRemainingPct,
-                pctLeft         = pctLeft,
-                periodo         = data.periodoPresupuesto,
-                onCardClick     = { navController.navigate(Routes.Budget) } // <-- Acción de navegación al hacer tap
-            )
-
-            // Fila de Indicadores Secundarios (Métricas de Ahorro Programado)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                val ahorroEstimado = totalPresupuestoConfigurado * (data.porcentajeAhorro / 100f)
-                SmallCard(label = "Ahorros (${data.porcentajeAhorro}%)", amount = ahorroEstimado, sub = "Meta este mes", modifier = Modifier.weight(1f))
-                SmallCard(label = "Gastos", amount = budgetSpent, sub = "Consumido total", modifier = Modifier.weight(1f))
-            }
-
-            // Renderizado de la Tarjeta de Consumo Diario
-            DailyCard(
-                spent       = dailySpent,
-                limit       = dailyLimit,
-                progressPct = dailyRemainingPct,
-                pctLeft     = dailyPctLeft
-            )
-
-            SectionHeader(
-                title = "Gastos recientes",
-                linkText = "Ver historial",
-                onLink = {
-                    navController.navigate(Routes.History)
+                val factorAhorro = if (porcentajeAhorro < 100) (100 - porcentajeAhorro) / 100.0 else 1.0
+                val presupuestoBaseOriginal = if (periodo != "Sin configurar" && factorAhorro > 0) {
+                    saldoDisponible / factorAhorro
+                } else {
+                    0.0
                 }
-            )
 
-            GastosHoy(listaGastos = data.ultimosGastos)
+                val montoAhorradoMeta = presupuestoBaseOriginal * (porcentajeAhorro / 100.0)
 
-            Spacer(modifier = Modifier.height(80.dp))
-        }
-    }
-}
+                val porcentajeRestanteFlotante = if (presupuestoBaseOriginal > 0) {
+                    ((saldoDisponible - gastosConsumidos) / presupuestoBaseOriginal).toFloat().coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
 
-// ─────────────────────────────────────────
-// COMPONENTES DE INTERFAZ GRÁFICA ATÓMICOS
-// ─────────────────────────────────────────
-@Composable
-private fun HomeHeader(userName: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text("Buenos días", color = TextMuted, fontSize = 12.sp)
-            Text(
-                text = "Hola, $userName 👋",
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.3).sp
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                IconButton(
-                    onClick = { /* TODO: Vincular flujo de notificaciones push */ },
+                val textoPorcentajeRestante = if (periodo != "Sin configurar") {
+                    "${(porcentajeRestanteFlotante * 100).toInt()}% restante"
+                } else {
+                    "0% restante"
+                }
+
+                Column(
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.06f))
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(Icons.Outlined.Notifications, contentDescription = "Notificaciones", tint = Color.White.copy(alpha = 0.65f), modifier = Modifier.size(20.dp))
-                }
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Purple)
-                        .align(Alignment.TopEnd)
-                        .offset(x = (-6).dp, y = 6.dp)
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(Purple),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (userName.isNotEmpty()) userName.first().uppercase() else "U",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
+                    Spacer(modifier = Modifier.height(8.dp))
 
-@Composable
-private fun BudgetCard(
-    saldoDisponible: Float,
-    spent: Float,
-    progressPct: Float,
-    pctLeft: Int,
-    periodo: String,
-    onCardClick: () -> Unit // <-- Callback de escucha al tacto
-) {
-    val animPct = remember { Animatable(0f) }
+                    // =========================================================
+                    // ENCABEZADO PERSONALIZADO: SALUDO, NOTIFICACIONES Y PERFIL
+                    // =========================================================
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Saludo al usuario
+                        Text(
+                            text = "Hola, David 👋",
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
 
-    LaunchedEffect(progressPct) {
-        animPct.animateTo(progressPct, tween(650, easing = EaseOutCubic))
-    }
+                        // Grupo de botones de acción rápidos (Notificaciones + Perfil)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Icono de Notificaciones
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notificaciones",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clickable {
+                                        // TODO: Vincular a la pantalla de notificaciones motivacionales
+                                    }
+                            )
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(BgCard)
-            .clickable { onCardClick() } // <-- Hace interactiva toda el área de la tarjeta
-            .padding(18.dp)
-    ) {
-        Text("Presupuesto $periodo", color = TextMuted, fontSize = 11.sp, letterSpacing = 0.6.sp)
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "$${"%.2f".format(saldoDisponible)}",
-            color = Color.White,
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-1).sp
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        LinearProgressIndicator(
-            progress = { animPct.value },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(99.dp)),
-            color = barColor(1f - progressPct),
-            trackColor = Color.White.copy(alpha = 0.08f),
-            strokeCap = StrokeCap.Round
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("$pctLeft% restante", color = TextDim, fontSize = 12.sp)
-            Text("$${"%.2f".format(spent)} gastado", color = TextDim, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
-private fun SmallCard(label: String, amount: Float, sub: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(BgCard)
-            .padding(14.dp)
-    ) {
-        Text(label.uppercase(), color = TextMuted, fontSize = 11.sp, letterSpacing = 0.6.sp)
-        Spacer(modifier = Modifier.height(6.dp))
-        Text("$${"%.2f".format(amount)}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
-        Text(sub, color = TextDim, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun DailyCard(spent: Float, limit: Float, progressPct: Float, pctLeft: Int) {
-    val animPct = remember { Animatable(0f) }
-    LaunchedEffect(progressPct) {
-        animPct.animateTo(progressPct, tween(650, easing = EaseOutCubic))
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(BgCard)
-            .padding(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Límite diario".uppercase(), color = TextMuted, fontSize = 11.sp, letterSpacing = 0.6.sp)
-            Text("$pctLeft% disponible hoy", color = Purple.copy(alpha = 0.85f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("$${"%.2f".format(spent)}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
-            Text("de $${"%.2f".format(limit)}", color = TextMuted, fontSize = 13.sp)
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        LinearProgressIndicator(
-            progress = { animPct.value },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(99.dp)),
-            color = barColor(1f - progressPct),
-            trackColor = Color.White.copy(alpha = 0.08f),
-            strokeCap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, linkText: String, onLink: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        TextButton(onClick = onLink, contentPadding = PaddingValues(0.dp)) {
-            Text(linkText, color = Purple.copy(alpha = 0.70f), fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
-private fun GastosHoy(listaGastos: List<GastoHome>) {
-    if (listaGastos.isEmpty()) {
-        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-            Text("Aquí se mostrarán tus gastos del período", color = TextDim, fontSize = 13.sp)
-        }
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            listaGastos.forEach { gasto ->
-                GastoRow(gasto)
-            }
-        }
-    }
-}
-
-@Composable
-private fun GastoRow(gasto: GastoHome) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(BgCard)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Purple.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Outlined.Person, contentDescription = null, tint = Purple, modifier = Modifier.size(18.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(gasto.descripcion, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(gasto.fecha, color = TextDim, fontSize = 11.sp)
-        }
-        Text("-$${"%.2f".format(gasto.monto)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-fun HomeBottomNav(navController: NavController, currentRoute: Routes = Routes.Home) {
-    NavigationBar(
-        containerColor = BgDark,
-        tonalElevation = 0.dp,
-        modifier = Modifier.height(64.dp)
-    ) {
-        // Estructura de navegación con ruteo explícito para la pantalla de presupuesto
-        val items = listOf(
-            Triple("Inicio",      Icons.Outlined.Person, Routes.Home),
-            Triple("Historial",   Icons.Outlined.DateRange, Routes.History),
-            Triple("Gráficas",    Icons.Outlined.Analytics, Routes.AddExpense),
-            Triple("Presupuesto", Icons.Outlined.Wallet, Routes.Budget),
-        )
-        items.forEachIndexed { index, (label, icon, route) ->
-            NavigationBarItem(
-                // Se evalúa dinámicamente según la pantalla activa para iluminar el icono correcto
-                selected = currentRoute == route,
-                onClick = {
-                    if (currentRoute != route) {
-                        navController.navigate(route) {
-                            popUpTo(Routes.Home) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                            // Avatar Circular de Usuario
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Purple)
+                                    .clickable {
+                                        // TODO: Vincular a la pantalla de configuración de perfil
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "D",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
-                },
-                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) },
-                label = { Text(label, fontSize = 10.sp) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor   = Purple,
-                    selectedTextColor   = Purple,
-                    unselectedIconColor = Color.White.copy(alpha = 0.25f),
-                    unselectedTextColor = Color.White.copy(alpha = 0.25f),
-                    indicatorColor      = Color.Transparent
-                )
-            )
+
+                    // =========================================================
+                    // 1. TARJETA: BALANCE DISPONIBLE LÍQUIDO
+                    // =========================================================
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(BgCard)
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Balance disponible",
+                            color = TextMuted,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "$${String.format("%.2f", saldoDisponible)}",
+                            color = Color.White,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (periodo != "Sin configurar") "Ciclo actual: $periodo" else "No hay un presupuesto activo",
+                            color = Purple,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // =========================================================
+                    // 2. TARJETA: PROGRESO DEL CICLO DE GASTOS
+                    // =========================================================
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BgCard)
+                            .padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Presupuesto General",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = textoPorcentajeRestante,
+                                color = if (porcentajeRestanteFlotante > 0.2f) GreenProgress else Color.Red,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        LinearProgressIndicator(
+                            progress = { porcentajeRestanteFlotante },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = Purple,
+                            trackColor = Color.White.copy(alpha = 0.08f)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "$${String.format("%.2f", gastosConsumidos)} gastados",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Total: $${String.format("%.2f", presupuestoBaseOriginal)}",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    // =========================================================
+                    // FILA: METAS DE AHORRO Y MÓDULO DE GASTOS TOTALES
+                    // =========================================================
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(BgCard)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Meta Ahorro ($porcentajeAhorro%)",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "$${String.format("%.2f", montoAhorradoMeta)}",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Retenido del total",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 10.sp
+                            )
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(BgCard)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Gastos Totales",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "$${String.format("%.2f", gastosConsumidos)}",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Consumo del ciclo",
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    // =========================================================
+                    // 3. TARJETA: MONITOR DE LÍMITE DIARIO DISPONIBLE
+                    // =========================================================
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BgCard)
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "LÍMITE DIARIO SUGERIDO",
+                            color = Purple.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+
+                        Text(
+                            text = "$${String.format("%.2f", limiteDiario)}",
+                            color = Color.White,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = if (limiteDiario > 0.0) "100% disponible hoy" else "Sin dinero asignado para hoy",
+                            color = GreenProgress,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
         }
     }
 }
