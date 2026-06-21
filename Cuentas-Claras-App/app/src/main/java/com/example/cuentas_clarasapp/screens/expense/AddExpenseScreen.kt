@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
+
 
 
 private val Purple     = Color(0xFF985EFF)
@@ -34,7 +36,7 @@ private val TextDim    = Color(0x66FFFFFF)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
-    navController: NavController,
+    navController : NavController,
     viewModel: AddExpenseViewModel = viewModel()
 ) {
     // Escucha reactiva del StateFlow bajo el ciclo de vida de la UI
@@ -47,6 +49,9 @@ fun AddExpenseScreen(
                 title = { Text("Cuentas Claras", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D1F54)) // Fondo morado oscuro superior del mockup
             )
+        },
+        bottomBar = {
+            CuentasClarasBottomNav(navController = navController)
         }
     ) { innerPadding ->
         when (val state = uiState) {

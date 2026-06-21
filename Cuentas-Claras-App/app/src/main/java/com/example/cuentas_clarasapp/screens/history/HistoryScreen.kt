@@ -21,8 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.cuentas_clarasapp.navigation.Routes
-import com.example.cuentas_clarasapp.screens.home.HomeBottomNav
+import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
 
 private val Purple     = Color(0xFF985EFF)
 private val BgDark     = Color(0xFF111013)
@@ -46,7 +45,7 @@ fun HistoryScreen(
             )
         },
         bottomBar = {
-            HomeBottomNav(navController = navController, currentRoute = Routes.History)
+            CuentasClarasBottomNav(navController = navController)
         }
     ) { innerPadding ->
         when (val state = uiState) {

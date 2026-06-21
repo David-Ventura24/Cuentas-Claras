@@ -37,25 +37,22 @@ fun CuentasClarasBottomNav(navController: NavController) {
         // Mapeamos las pestañas con sus rutas exactas del sistema Type-Safe
         // Nota: Asegúrate de que apunten a la estructura de tu clase 'Routes'
         val items = listOf(
-            Triple("Inicio",      Icons.Outlined.Home,      Routes.Home::class.qualifiedName),
-            Triple("Historial",   Icons.Outlined.List,      "historial_route"), // Placeholder temporal
-            Triple("Gráficas",    Icons.Outlined.Info,      "graficas_route"),  // Placeholder temporal
-            Triple("Presupuesto", Icons.Outlined.DateRange, Routes.Budget::class.qualifiedName),
+            Triple("Inicio",      Icons.Outlined.Home,      Routes.Home),
+            Triple("Historial",   Icons.Outlined.List,      Routes.History),
+            Triple("Gráficas",    Icons.Outlined.Info,      Routes.AddExpense),
+            Triple("Presupuesto", Icons.Outlined.DateRange, Routes.Budget),
         )
 
-        items.forEach { (label, icon, routeClassInGrafo) ->
-            // 2. COMPROBACIÓN RECURSIVA: Compara si la pantalla actual coincide con la de este botón
-            // Usamos 'contains' porque el sistema Type-Safe añade el paquete completo al string de la ruta
-            val esSeleccionado = currentRoute?.contains(routeClassInGrafo ?: "") == true
+        items.forEach { (label, icon, route) ->
+            // En Navigation Type-Safe, el route del destino contiene el nombre calificado de la clase
+            val routeClassName = route::class.qualifiedName ?: ""
+            val esSeleccionado = currentRoute?.contains(routeClassName) == true
 
             NavigationBarItem(
                 selected = esSeleccionado,
                 onClick = {
-                    if (!esSeleccionado && routeClassInGrafo != null) {
-                        // Determinamos a qué objeto de ruta real navegar
-                        val destinoReal = if (label == "Inicio") Routes.Home else Routes.Budget
-
-                        navController.navigate(destinoReal) {
+                    if (!esSeleccionado) {
+                        navController.navigate(route) {
                             popUpTo(Routes.Home) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
