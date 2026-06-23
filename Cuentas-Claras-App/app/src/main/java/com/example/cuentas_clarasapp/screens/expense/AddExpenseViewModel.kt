@@ -1,52 +1,84 @@
 package com.example.cuentas_clarasapp.screens.expense
 
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuentas_clarasapp.data.model.GastoRegistrado
+import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class AddExpenseViewModel : ViewModel() {
 
-    private val _uiState = MutableStateFlow<AddExpenseUiState>(AddExpenseUiState.Loading)
+    private val _uiState = MutableStateFlow(AddExpenseUiState())
     val uiState: StateFlow<AddExpenseUiState> = _uiState.asStateFlow()
 
-    init {
-        cargarAnalisis()
+    fun onMontoChange(value: String) {
+        _uiState.update { it.copy(monto = value, montoError = null, presupuestoError = null) }
     }
 
-    fun refrescarContenido() {
-        cargarAnalisis()
+    fun onCategoriaSelected(id: String) {
+        _uiState.update { it.copy(categoriaId = id, categoriaError = null) }
     }
 
-    // Lógica simulada para los botones de navegación de fechas
-    fun cambiarMes(avanzar: Boolean) {
-        // TODO: BACKEND INTEGRATION - Filtrar dinámicamente por mes/año desde la base de datos por medio de Visual Studio
+    fun onNotaChange(value: String) {
+        _uiState.update { it.copy(nota = value) }
     }
 
-    private fun cargarAnalisis() {
-        viewModelScope.launch {
-            _uiState.value = AddExpenseUiState.Loading
-            try {
-                _uiState.value = AddExpenseUiState.Success(
-                    data = ExpenseAnalyticsData(
-                        mesAnioFiltro = "Mayo 2026",
-                        montoTotalGastado = 313.00,
-                        categorias = listOf(
-                            CategoriaGastoData("Alimentación", 38.5f, 120.50, Color(0xFFF87171)), // Rojo suave del sistema
-                            CategoriaGastoData("Educación", 27.2f, 85.00, Color(0xFF4ADE80)),    // Verde del sistema
-                            CategoriaGastoData("Transporte", 14.4f, 45.00, Color(0xFF3A86FF)),   // Azul
-                            CategoriaGastoData("Ahorro", 10.3f, 32.24, Color(0xFF985EFF)),       // Morado principal (Purple)
-                            CategoriaGastoData("Restaurantes", 5.1f, 16.00, Color(0xFFFACC15)),  // Amarillo
-                            CategoriaGastoData("Otros", 4.5f, 14.26, Color(0xFF70777A))          // Gris
-                        )
-                    )
-                )
-            } catch (e: Exception) {
-                _uiState.value = AddExpenseUiState.Error("No se pudo conectar con el servidor")
+    fun onPhotoSelected(uri: String) {
+        _uiState.update { it.copy(fotoUri = uri) }
+    }
+
+    fun guardarGasto(onSuccess: () -> Unit) {
+        val state = _uiState.value
+        val montoFloat = state.monto.toFloatOrNull()
+
+        // --- Validaciones ---
+        var montoError: String? = null
+        var categoriaError: String? = null
+
+        if (state.monto.isBlank() || montoFloat == null || montoFloat <= 0f) {
+            montoError = "Ingresa cuánto gastaste"
+        }
+        if (state.categoriaId == null) {
+            categoriaError = "Selecciona una categoría"
+        }
+
+        if (montoError != null || categoriaError != null) {
+            _uiState.update { it.copy(montoError = montoError, categoriaError = categoriaError) }
+            return
+        }
+
+        // --- Validación de presupuesto ---
+        if (!FinanzasRepository.puedeRegistrarGasto(montoFloat!!)) {
+            _uiState.update {
+                it.copy(presupuestoError = "No tienes suficiente presupuesto disponible")
             }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true) }
+
+            // Simulación de red/DB
+            delay(600)
+
+            FinanzasRepository.registrarGasto(
+                GastoRegistrado(
+                    id = UUID.randomUUID().toString(),
+                    categoriaId = state.categoriaId!!,
+                    monto = montoFloat,
+                    nota = state.nota,
+                    fotoUri = state.fotoUri
+                )
+            )
+
+            _uiState.update { it.copy(isSaving = false) }
+            onSuccess()
         }
     }
 }

@@ -39,7 +39,7 @@ fun CuentasClarasBottomNav(navController: NavController) {
         val items = listOf(
             Triple("Inicio",      Icons.Outlined.Home,      Routes.Home),
             Triple("Historial",   Icons.Outlined.List,      Routes.History),
-            Triple("Gráficas",    Icons.Outlined.Info,      Routes.AddExpense),
+            Triple("Gráficas",    Icons.Outlined.Info,      Routes.Analytics),
             Triple("Presupuesto", Icons.Outlined.DateRange, Routes.Budget),
         )
 

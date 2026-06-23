@@ -19,10 +19,17 @@ import com.example.cuentas_clarasapp.screens.home.HomeViewModel
 import com.example.cuentas_clarasapp.screens.home.HomeUiState
 import com.example.cuentas_clarasapp.screens.budget.BudgetSetupScreen
 import com.example.cuentas_clarasapp.screens.budget.BudgetSetupViewModel
-import com.example.cuentas_clarasapp.screens.expense.AddExpenseScreen
-import com.example.cuentas_clarasapp.screens.expense.AddExpenseViewModel
 import com.example.cuentas_clarasapp.screens.history.HistoryScreen
 import com.example.cuentas_clarasapp.screens.history.HistoryViewModel
+import com.example.cuentas_clarasapp.screens.analytics.AnalyticsScreen
+import com.example.cuentas_clarasapp.screens.analytics.AnalyticsViewModel
+import com.example.cuentas_clarasapp.screens.expense.AddExpenseScreen
+
+// 🌟 Importaciones de las nuevas pantallas organizadas por paquetes independientes
+import com.example.cuentas_clarasapp.screens.notifications.NotificationScreen
+import com.example.cuentas_clarasapp.screens.notifications.NotificationViewModel
+import com.example.cuentas_clarasapp.screens.profile.ProfileScreen
+import com.example.cuentas_clarasapp.screens.profile.ProfileViewModel
 
 @Composable
 fun MainNavigation() {
@@ -32,26 +39,19 @@ fun MainNavigation() {
     NavHost(
         navController = navController,
         startDestination = Routes.Splash,
-        // =========================================================================
-        // CONFIGURACIÓN GLOBAL DE TRANSICIONES (Se recicla en todas las pantallas)
-        // =========================================================================
 
-        // 1. Cómo entra una nueva pantalla al frente (Desliza desde la derecha + aparece suave)
         enterTransition = {
             slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400)) +
                     fadeIn(animationSpec = tween(400))
         },
-        // 2. Cómo sale la pantalla anterior hacia atrás (Desliza hacia la izquierda + se desvanece)
         exitTransition = {
             slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(400)) +
                     fadeOut(animationSpec = tween(400))
         },
-        // 3. Cómo vuelve a entrar una pantalla del historial al hacer atrás (Desliza desde la izquierda)
         popEnterTransition = {
             slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(400)) +
                     fadeIn(animationSpec = tween(400))
         },
-        // 4. Cómo se destruye la pantalla actual al hacer atrás (Desliza hacia la derecha)
         popExitTransition = {
             slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400)) +
                     fadeOut(animationSpec = tween(400))
@@ -101,6 +101,25 @@ fun MainNavigation() {
             )
         }
 
+        // --- PANTALLA DE NOTIFICACIONES ---
+        composable<Routes.Notifications> {
+            val notificationViewModel: NotificationViewModel = viewModel()
+            NotificationScreen(
+                navController = navController,
+                notificationViewModel = notificationViewModel,
+                homeViewModel = sharedHomeViewModel
+            )
+        }
+
+        // --- PANTALLA DE PERFIL ---
+        composable<Routes.Profile> {
+            val profileViewModel: ProfileViewModel = viewModel()
+            ProfileScreen(
+                navController = navController,
+                viewModel = profileViewModel
+            )
+        }
+
         // --- PANTALLA DE CONFIGURACIÓN DE PRESUPUESTO ---
         composable<Routes.Budget> {
             val budgetSetupViewModel: BudgetSetupViewModel = viewModel()
@@ -131,13 +150,25 @@ fun MainNavigation() {
                 }
             )
         }
+
+        // --- PANTALLA DE INGRESAR NUEVO GASTO ---
         composable<Routes.AddExpense> {
-            val addExpenseViewModel: AddExpenseViewModel = viewModel()
             AddExpenseScreen(
                 navController = navController,
-                viewModel = addExpenseViewModel
+                homeViewModel = sharedHomeViewModel
             )
         }
+
+        // --- PANTALLA DE ANÁLISIS Y GRÁFICAS ---
+        composable<Routes.Analytics> {
+            val analyticsViewModel: AnalyticsViewModel = viewModel()
+            AnalyticsScreen(
+                navController = navController,
+                viewModel = analyticsViewModel
+            )
+        }
+
+        // --- PANTALLA DE HISTORIAL ---
         composable<Routes.History> {
             val historyViewModel: HistoryViewModel = viewModel()
             HistoryScreen(

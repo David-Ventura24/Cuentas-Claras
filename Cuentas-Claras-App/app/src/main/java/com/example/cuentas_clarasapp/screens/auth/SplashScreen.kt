@@ -3,7 +3,6 @@ package com.example.cuentas_clarasapp.screens.auth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseOutCubic
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -47,14 +46,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun SplashScreen(onNavigateToLogin: () -> Unit) {
 
-    // --- Animaciones de entrada ---
     val alphaLogo = remember { Animatable(0f) }
     val scaleLogo = remember { Animatable(0.75f) }
     val alphaText = remember { Animatable(0f) }
     val alphaTagline = remember { Animatable(0f) }
     val arcSweep = remember { Animatable(0f) }
 
-    // Pulso sutil infinito en el anillo cuando ya está completo
     val infiniteTransition = rememberInfiniteTransition(label = "ring_pulse")
     val ringAlpha by infiniteTransition.animateFloat(
         initialValue = 0.7f,
@@ -67,31 +64,29 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
     )
 
     LaunchedEffect(Unit) {
-        // Logo aparece con scale + fade
+        // Logo + anillo aparecen juntos, más rápido
         launch {
-            alphaLogo.animateTo(1f, tween(600, easing = EaseOutCubic))
+            alphaLogo.animateTo(1f, tween(350, easing = EaseOutCubic))
         }
         launch {
-            scaleLogo.animateTo(1f, tween(700, easing = EaseOutCubic))
+            scaleLogo.animateTo(1f, tween(400, easing = EaseOutCubic))
         }
-        // Arco se dibuja al mismo tiempo
         launch {
-            delay(200)
-            arcSweep.animateTo(360f, tween(900, easing = EaseInOutCubic))
+            arcSweep.animateTo(360f, tween(500, easing = EaseInOutCubic))
         }
-        // Título
-        delay(700)
-        alphaText.animateTo(1f, tween(400, easing = EaseOutCubic))
-        // Tagline
-        delay(200)
-        alphaTagline.animateTo(1f, tween(400, easing = EaseOutCubic))
 
-        delay(1200)
+        // Título y tagline aparecen casi enseguida después
+        delay(350)
+        alphaText.animateTo(1f, tween(250, easing = EaseOutCubic))
+        alphaTagline.animateTo(1f, tween(250, easing = EaseOutCubic))
+
+        // Pausa breve para que se aprecie, y navega
+        delay(400)
         onNavigateToLogin()
     }
 
-    val bgCenter = Color(0xFF1C1A2E)   // Azul-violeta muy oscuro en el centro
-    val bgEdge   = Color(0xFF0D0C14)   // Negro casi puro en los bordes
+    val bgCenter = Color(0xFF1C1A2E)
+    val bgEdge   = Color(0xFF0D0C14)
     val purple   = Color(0xFF985EFF)
     val purpleDim = Color(0xFF5B3899)
 
@@ -107,7 +102,6 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
 
-        // Halo de fondo suave detrás del logo
         Canvas(modifier = Modifier.size(280.dp)) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -124,12 +118,10 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
 
-            // --- Logo + anillo de progreso ---
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(180.dp)
             ) {
-                // Pista del arco (fondo gris muy sutil)
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val stroke = 3.5.dp.toPx()
                     val inset = stroke / 2f
@@ -144,7 +136,6 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
                     )
                 }
 
-                // Arco de progreso animado
                 Canvas(modifier = Modifier
                     .fillMaxSize()
                     .alpha(if (arcSweep.value >= 359f) ringAlpha else 1f)
@@ -168,21 +159,18 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
                     )
                 }
 
-                // Logo
                 Image(
                     painter = painterResource(id = R.drawable.cuentas_claras_logo),
                     contentDescription = "Logo de Cuentas Claras",
                     modifier = Modifier
                         .size(110.dp)
                         .alpha(alphaLogo.value)
-                        // Scale manual con graphicsLayer
                         .graphicsLayer(scaleX = scaleLogo.value, scaleY = scaleLogo.value)
                 )
             }
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // --- Título ---
             Text(
                 text = "Cuentas Claras",
                 color = Color.White,
@@ -194,7 +182,6 @@ fun SplashScreen(onNavigateToLogin: () -> Unit) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Tagline ---
             Text(
                 text = "Control total, finanzas claras.",
                 color = purple.copy(alpha = 0.80f),

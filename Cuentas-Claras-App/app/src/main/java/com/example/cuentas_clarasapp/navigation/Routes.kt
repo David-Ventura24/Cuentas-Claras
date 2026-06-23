@@ -23,5 +23,14 @@ sealed class Routes {
     data object AddExpense : Routes()
 
     @Serializable
+    data object Analytics : Routes()
+
+    @Serializable
     data object History : Routes()
+
+    @Serializable
+    data object Notifications : Routes()
+
+    @Serializable
+    data object Profile : Routes()
 }

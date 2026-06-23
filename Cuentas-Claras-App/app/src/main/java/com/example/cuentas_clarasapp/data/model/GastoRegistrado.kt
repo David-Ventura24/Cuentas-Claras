@@ -1,6 +1,6 @@
 package com.example.cuentas_clarasapp.data.model
 
-data class Expense(
+data class GastoRegistrado(
     val id: String,
     val categoriaId: String,
     val monto: Float,

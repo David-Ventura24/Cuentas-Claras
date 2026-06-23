@@ -1,242 +1,417 @@
 package com.example.cuentas_clarasapp.screens.expense
 
-import androidx.compose.foundation.Canvas
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
+import coil.compose.rememberAsyncImagePainter
+import com.example.cuentas_clarasapp.screens.home.HomeUiState
+import com.example.cuentas_clarasapp.screens.home.HomeViewModel
+import kotlinx.coroutines.launch
+import java.io.File
 
+private val Purple    = Color(0xFF985EFF)
+private val BgDark    = Color(0xFF111013)
+private val BgCard    = Color(0xFF1A1820)
+private val TextMuted = Color(0x59FFFFFF)
+private val TextDim   = Color(0x33FFFFFF)
 
-
-private val Purple     = Color(0xFF985EFF)
-private val BgDark     = Color(0xFF111013)
-private val BgCard     = Color(0xFF1A1820)
-private val TextMuted  = Color(0x4DFFFFFF)
-private val TextDim    = Color(0x66FFFFFF)
+data class CategoriaItem(
+    val id: String,
+    val nombre: String,
+    val icono: ImageVector
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
-    navController : NavController,
-    viewModel: AddExpenseViewModel = viewModel()
+    navController: NavController,
+    homeViewModel: HomeViewModel, // 🌟 PASAMOS EL HOME VIEWMODEL PARA ACOPLAR AMBOS COMPONENTES
+    addExpenseViewModel: AddExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
-    // Escucha reactiva del StateFlow bajo el ciclo de vida de la UI
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val uiState by addExpenseViewModel.uiState.collectAsState()
+    val homeUiState by homeViewModel.uiState.collectAsState()
+
+    // Contenedor para mostrar mensajes flotantes (Snackbars)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var showPermissionDeniedDialog by remember { mutableStateOf(false) }
+
+    // 🌟 LEEMOS EL BALANCE REAL DESDE EL HOMEVIEWMODEL DE MANERA REACTIVA
+    val balanceDisponibleHome = when (homeUiState) {
+        is HomeUiState.Success -> (homeUiState as HomeUiState.Success).data.saldoDisponible
+        else -> 0.0
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && pendingCameraUri != null) {
+            photoUri = pendingCameraUri
+            addExpenseViewModel.onPhotoSelected(pendingCameraUri.toString())
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            val uri = crearUriTemporalParaFoto(context)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            showPermissionDeniedDialog = true
+        }
+    }
+
+    fun onCameraClick() {
+        val permisoOtorgado = context.checkSelfPermission(Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+
+        if (permisoOtorgado) {
+            val uri = crearUriTemporalParaFoto(context)
+            pendingCameraUri = uri
+            cameraLauncher.launch(uri)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    val categorias = remember {
+        listOf(
+            CategoriaItem("alimentacion", "Alimentación", Icons.Default.Restaurant),
+            CategoriaItem("transporte",   "Transporte",   Icons.Default.DirectionsCar),
+            CategoriaItem("ocio",         "Ocio",         Icons.Default.SportsEsports),
+            CategoriaItem("compras",      "Compras",      Icons.Default.ShoppingBag),
+            CategoriaItem("educacion",    "Educación",    Icons.Default.School),
+            CategoriaItem("otros",        "Otros",        Icons.Default.MoreHoriz)
+        )
+    }
+
+    // --- Validaciones de Negocio ---
+    val montoIngresado = uiState.monto.toDoubleOrNull() ?: 0.0
+    val tieneMontoValido = uiState.monto.isNotEmpty() && montoIngresado > 0.0
+    val tieneCategoria = uiState.categoriaId != null
+    val tieneSaldoSuficiente = montoIngresado <= balanceDisponibleHome
+
+    // El botón se activa únicamente si cumple con los requisitos mínimos de guardado
+    val botonHabilitado = tieneMontoValido && tieneCategoria && tieneSaldoSuficiente && !uiState.isSaving
 
     Scaffold(
         containerColor = BgDark,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Cuentas Claras", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D1F54)) // Fondo morado oscuro superior del mockup
+                title = { Text("Nuevo gasto", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = Color.White)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BgDark)
             )
         },
         bottomBar = {
-            CuentasClarasBottomNav(navController = navController)
-        }
-    ) { innerPadding ->
-        when (val state = uiState) {
-            is AddExpenseUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
+            Box(modifier = Modifier.padding(20.dp, 12.dp, 20.dp, 22.dp)) {
+                Button(
+                    onClick = {
+                        // Verificación de alertas prioritarias antes de procesar
+                        if (!tieneMontoValido) {
+                            scope.launch { snackbarHostState.showSnackbar("Debes insertar una cantidad válida antes de guardar.") }
+                        } else if (!tieneCategoria) {
+                            scope.launch { snackbarHostState.showSnackbar("Debes seleccionar una categoría antes de guardar el gasto.") }
+                        } else if (!tieneSaldoSuficiente) {
+                            scope.launch { snackbarHostState.showSnackbar("No tienes saldo suficiente en tu balance disponible para este gasto.") }
+                        } else {
+                            // 🌟 1. ACTUALIZA EL HOME VIEWMODEL CON LOS DATOS REALES DEL GASTO
+                            homeViewModel.registrarNuevoGasto(
+                                monto = montoIngresado,
+                                categoriaId = uiState.categoriaId!!,
+                                nota = uiState.nota
+                            )
+
+                            // 🌟 2. PERSISTENCIA O FLUJO PROPIO DEL FORMULARIO ANTES DE SALIR
+                            addExpenseViewModel.guardarGasto(onSuccess = {
+                                navController.popBackStack()
+                            })
+                        }
+                    },
+                    enabled = botonHabilitado,
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Purple,
+                        disabledContainerColor = BgCard,
+                        contentColor = Color.White,
+                        disabledContentColor = TextDim
+                    )
                 ) {
-                    CircularProgressIndicator(color = Purple)
+                    if (uiState.isSaving) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Guardar gasto", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-            is AddExpenseUiState.Success -> {
-                AddExpenseContent(
-                    data = state.data,
-                    viewModel = viewModel,
-                    innerPadding = innerPadding
-                )
-            }
-            is AddExpenseUiState.Error -> {
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // --- Fila de foto del recibo ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(BgCard)
+                    .clickable { onCameraClick() }
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Purple.copy(alpha = 0.10f))
+                        .border(1.5.dp, Purple.copy(alpha = 0.45f), RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = state.mensaje, color = Color.Red, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.refrescarContenido() }) {
-                            Text("Reintentar")
+                    if (photoUri != null) {
+                        Image(
+                            painter = rememberAsyncImagePainter(photoUri),
+                            contentDescription = "Foto del recibo",
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Purple, modifier = Modifier.size(24.dp))
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (photoUri != null) "Foto agregada" else "Agregar foto del recibo",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = if (photoUri != null) "Toca para cambiarla" else "Opcional",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextDim)
+            }
+
+            // --- Monto (Módulo Centralizado Corregido) ---
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("¿Cuánto gastaste?", color = TextMuted, fontSize = 13.sp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text("$", color = Color.White.copy(alpha = 0.40f), fontSize = 42.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = uiState.monto,
+                        onValueChange = { nuevo ->
+                            if (nuevo.isEmpty() || nuevo.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                addExpenseViewModel.onMontoChange(nuevo)
+                            }
+                        },
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Purple),
+                        modifier = Modifier.widthIn(min = 120.dp, max = 280.dp),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.Center) {
+                                if (uiState.monto.isEmpty()) {
+                                    Text("0.00", color = Color.White.copy(alpha = 0.25f), fontSize = 52.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                                }
+                                inner()
+                            }
+                        }
+                    )
+                }
+                Box(modifier = Modifier.width(160.dp).height(2.dp).background(Purple, RoundedCornerShape(2.dp)))
+            }
+
+            // --- Categorías ---
+            Column {
+                Text(
+                    "CATEGORÍA",
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    letterSpacing = 0.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                val filas = categorias.chunked(3)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    filas.forEach { fila ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            fila.forEach { cat ->
+                                val seleccionado = uiState.categoriaId == cat.id
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(if (seleccionado) Purple.copy(alpha = 0.12f) else BgCard)
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = if (seleccionado) Purple else Color.Transparent,
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        .clickable { addExpenseViewModel.onCategoriaSelected(cat.id) }
+                                        .padding(vertical = 14.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (seleccionado) Purple.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.05f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = cat.icono,
+                                            contentDescription = cat.nombre,
+                                            tint = if (seleccionado) Purple else Color.White.copy(alpha = 0.55f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = cat.nombre,
+                                        color = if (seleccionado) Purple else Color.White.copy(alpha = 0.45f),
+                                        fontSize = 11.sp,
+                                        fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun AddExpenseContent(
-    data: ExpenseAnalyticsData,
-    viewModel: AddExpenseViewModel,
-    innerPadding: PaddingValues
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Análisis de gastos",
-            color = Color.White,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.3).sp
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Selector de Fecha
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { viewModel.cambiarMes(avanzar = false) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Mes anterior", tint = Purple)
-            }
-            Text(
-                text = data.mesAnioFiltro,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            IconButton(onClick = { viewModel.cambiarMes(avanzar = true) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Mes siguiente", tint = Purple)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        //Tarjeta Contenedora Principal de la Gráfica
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(BgCard)
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            //GRÁFICA DE DONA INTERACTIVA
-            Box(
-                modifier = Modifier
-                    .size(220.dp)
-                    .padding(12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    var startAngle = -90f // Comienza en el eje superior vertical
-
-                    data.categorias.forEach { categoria ->
-                        val sweepAngle = (categoria.porcentaje / 100f) * 360f
-                        drawArc(
-                            color = categoria.color,
-                            startAngle = startAngle,
-                            sweepAngle = sweepAngle,
-                            useCenter = false,
-                            style = Stroke(width = 36.dp.toPx()) // Grosor
-                        )
-                        startAngle += sweepAngle
-                    }
-                }
-
-                // Indicador monetario
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "$${"%.2f".format(data.montoTotalGastado)}",
-                        color = Color.White,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.5).sp
+            // --- Nota opcional ---
+            Column {
+                Text(
+                    "NOTA (OPCIONAL)",
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    letterSpacing = 0.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                OutlinedTextField(
+                    value = uiState.nota,
+                    onValueChange = { addExpenseViewModel.onNotaChange(it) },
+                    placeholder = { Text("Ej. Almuerzo con amigos", color = Color.White.copy(alpha = 0.20f), fontSize = 14.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = BgCard,
+                        unfocusedContainerColor = BgCard,
+                        focusedBorderColor = Purple.copy(alpha = 0.60f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                        cursorColor = Purple
                     )
-                }
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // DESGLOSE DE CATEGORÍAS
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                data.categorias.forEach { categoria ->
-                    CategoriaGastoRow(categoria = categoria)
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f), thickness = 1.dp)
-                }
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
-        Spacer(modifier = Modifier.height(40.dp))
+    }
+
+    if (showPermissionDeniedDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDeniedDialog = false },
+            containerColor = BgCard,
+            title = { Text("Permiso de cámara necesario", color = Color.White, fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Para adjuntar la foto de tu recibo necesitamos acceso a la cámara. Podés activarlo desde los ajustes de la app.",
+                    color = TextMuted,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPermissionDeniedDialog = false }) {
+                    Text("Entendido", color = Purple)
+                }
+            }
+        )
     }
 }
 
-@Composable
-private fun CategoriaGastoRow(categoria: CategoriaGastoData) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Círculo de color identificador de la categoría
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(categoria.color)
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // Etiqueta del nombre
-        Text(
-            text = categoria.nombre,
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
-        )
-
-        // Metrica porcentual
-        Text(
-            text = "${"%.1f".format(categoria.porcentaje)}%",
-            color = TextDim,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        // Saldo absoluto por categoría
-        Text(
-            text = "$${"%.2f".format(categoria.monto)}",
-            color = Color.White,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
+private fun crearUriTemporalParaFoto(context: android.content.Context): Uri {
+    val archivo = File.createTempFile(
+        "gasto_${System.currentTimeMillis()}_",
+        ".jpg",
+        context.cacheDir
+    )
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        archivo
+    )
 }

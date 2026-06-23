@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.CuentasClarasApp" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.CuentasClarasApp.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimationDuration">1</item>
+        <item name="postSplashScreenTheme">@style/Theme.CuentasClarasApp</item>
+    </style>
+
+
 </resources>
