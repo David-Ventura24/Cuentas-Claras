@@ -40,6 +40,7 @@ android {
 
     room {
         schemaDirectory("$projectDir/schemas")
+        generateKotlin = true
     }
 }
 
@@ -50,11 +51,12 @@ kotlin {
 }
 
 dependencies {
-
+    // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
 
+    // Jetpack Compose BOM & Material 3
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
@@ -62,29 +64,30 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material.icons.extended)
 
-
     // Navigation 3
     implementation(libs.androidx.navigation3)
 
-    // Ktor (Consumo de API HTTP & Serialización JSON para Express)
+    // Ktor (Consumo de API HTTP & Serialización JSON)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
-    // Room (Base de datos local)
+    // Room (Base de datos local persistente)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.vision.internal.vkp)
     ksp(libs.androidx.room.compiler)
 
-    // Coil 3 (Cargar fotos de comprobantes de gastos vía URL)
+    // Coil 3 (Soporte nativo para imágenes y comprobantes)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
-    implementation("io.coil-kt:coil-compose:2.6.0")
 
-
+    // UI Components adicionales
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // Librería oficial para autenticación biométrica
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 
     // Testing
     testImplementation(libs.junit)

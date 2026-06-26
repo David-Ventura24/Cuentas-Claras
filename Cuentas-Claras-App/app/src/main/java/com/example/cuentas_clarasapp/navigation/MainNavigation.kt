@@ -6,35 +6,51 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.cuentas_clarasapp.data.local.AppDatabase
+import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
 import com.example.cuentas_clarasapp.screens.auth.SplashScreen
 import com.example.cuentas_clarasapp.screens.auth.LoginScreen
 import com.example.cuentas_clarasapp.screens.auth.RegisterScreen
-import com.example.cuentas_clarasapp.screens.home.HomeScreen
 import com.example.cuentas_clarasapp.screens.home.HomeViewModel
-import com.example.cuentas_clarasapp.screens.home.HomeUiState
-import com.example.cuentas_clarasapp.screens.budget.BudgetSetupScreen
-import com.example.cuentas_clarasapp.screens.budget.BudgetSetupViewModel
 import com.example.cuentas_clarasapp.screens.history.HistoryScreen
 import com.example.cuentas_clarasapp.screens.history.HistoryViewModel
 import com.example.cuentas_clarasapp.screens.analytics.AnalyticsScreen
 import com.example.cuentas_clarasapp.screens.analytics.AnalyticsViewModel
 import com.example.cuentas_clarasapp.screens.expense.AddExpenseScreen
-
-// 🌟 Importaciones de las nuevas pantallas organizadas por paquetes independientes
+import com.example.cuentas_clarasapp.screens.expense.AddExpenseViewModel
+import com.example.cuentas_clarasapp.screens.main.MainTabsScreen
 import com.example.cuentas_clarasapp.screens.notifications.NotificationScreen
 import com.example.cuentas_clarasapp.screens.notifications.NotificationViewModel
 import com.example.cuentas_clarasapp.screens.profile.ProfileScreen
 import com.example.cuentas_clarasapp.screens.profile.ProfileViewModel
+import com.example.cuentas_clarasapp.screens.savings.GlobalSavingsScreen
+import com.example.cuentas_clarasapp.screens.savings.SavingsViewModel
 
 @Composable
 fun MainNavigation() {
     val navController = rememberNavController()
-    val sharedHomeViewModel: HomeViewModel = viewModel()
+    val context = LocalContext.current
+
+    // 1. Inicializar la base de datos de Room y el repositorio de forma centralizada con ambos DAOs
+    val database = AppDatabase.getDatabase(context)
+    val repository = FinanzasRepository(database.gastoDao(), database.ahorroDao()) // 🌟 CORREGIDO: Se inyecta ahorroDao
+
+    // 2. Inyección correcta usando Factory para el HomeViewModel (Compartido)
+    val sharedHomeViewModel: HomeViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return HomeViewModel(repository) as T
+            }
+        }
+    )
 
     NavHost(
         navController = navController,
@@ -93,11 +109,11 @@ fun MainNavigation() {
             )
         }
 
-        // --- PANTALLA PRINCIPAL (HOME) ---
+        // --- PANTALLA PRINCIPAL CON CONTENEDOR DE PESTAÑAS ---
         composable<Routes.Home> {
-            HomeScreen(
+            MainTabsScreen(
                 navController = navController,
-                viewModel = sharedHomeViewModel
+                homeViewModel = sharedHomeViewModel
             )
         }
 
@@ -120,42 +136,21 @@ fun MainNavigation() {
             )
         }
 
-        // --- PANTALLA DE CONFIGURACIÓN DE PRESUPUESTO ---
-        composable<Routes.Budget> {
-            val budgetSetupViewModel: BudgetSetupViewModel = viewModel()
-            val homeState = sharedHomeViewModel.uiState.collectAsState().value
-
-            var saldo = 0f
-            var periodo = "Sin configurar"
-            var ahorro = 0f
-
-            if (homeState is HomeUiState.Success) {
-                saldo = homeState.data.saldoDisponible.toFloat()
-                periodo = homeState.data.periodoPresupuesto
-                ahorro = homeState.data.porcentajeAhorro.toFloat()
-            }
-
-            BudgetSetupScreen(
-                navController = navController,
-                viewModel = budgetSetupViewModel,
-                saldoActualHome = saldo,
-                periodoActualHome = periodo,
-                ahorroActualHome = ahorro,
-                onPresupuestoGuardado = { monto, per, ahr ->
-                    sharedHomeViewModel.actualizarPresupuestoDesdeConfiguracion(
-                        nuevoMonto = monto.toFloat(),
-                        nuevoPeriodo = per,
-                        nuevoPorcentajeAhorro = ahr.toFloat()
-                    )
-                }
-            )
-        }
-
         // --- PANTALLA DE INGRESAR NUEVO GASTO ---
         composable<Routes.AddExpense> {
+            val addExpenseViewModel: AddExpenseViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return AddExpenseViewModel(repository) as T
+                    }
+                }
+            )
+
             AddExpenseScreen(
                 navController = navController,
-                homeViewModel = sharedHomeViewModel
+                homeViewModel = sharedHomeViewModel,
+                viewModel = addExpenseViewModel
             )
         }
 
@@ -170,10 +165,36 @@ fun MainNavigation() {
 
         // --- PANTALLA DE HISTORIAL ---
         composable<Routes.History> {
-            val historyViewModel: HistoryViewModel = viewModel()
+            val historyViewModel: HistoryViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return HistoryViewModel(repository) as T
+                    }
+                }
+            )
+
             HistoryScreen(
                 navController = navController,
                 viewModel = historyViewModel
+            )
+        }
+
+        // --- PANTALLA DE AHORRO GLOBAL (NUEVA) ---
+        composable<Routes.GlobalSavings> {
+            // 🌟 INYECCIÓN SEGURA: Se inyecta correctamente el repositorio al SavingsViewModel mediante Factory
+            val savingsViewModel: SavingsViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return SavingsViewModel(repository) as T
+                    }
+                }
+            )
+
+            GlobalSavingsScreen(
+                navController = navController,
+                viewModel = savingsViewModel
             )
         }
     }

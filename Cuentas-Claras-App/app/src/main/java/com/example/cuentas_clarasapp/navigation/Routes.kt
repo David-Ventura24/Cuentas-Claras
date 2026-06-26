@@ -33,4 +33,6 @@ sealed class Routes {
 
     @Serializable
     data object Profile : Routes()
-}
+
+    @Serializable
+    data object GlobalSavings : Routes() }

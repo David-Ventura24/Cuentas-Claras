@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
 import com.example.cuentas_clarasapp.screens.home.HomeUiState
 import com.example.cuentas_clarasapp.screens.home.HomeViewModel
 import kotlinx.coroutines.launch
@@ -54,11 +54,11 @@ data class CategoriaItem(
 @Composable
 fun AddExpenseScreen(
     navController: NavController,
-    homeViewModel: HomeViewModel, // 🌟 PASAMOS EL HOME VIEWMODEL PARA ACOPLAR AMBOS COMPONENTES
-    addExpenseViewModel: AddExpenseViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    homeViewModel: HomeViewModel, // 🌟 Monitorea el saldo del Home
+    viewModel: AddExpenseViewModel // 🌟 Gestiona la inserción limpia en Room
 ) {
     val context = LocalContext.current
-    val uiState by addExpenseViewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val homeUiState by homeViewModel.uiState.collectAsState()
 
     // Contenedor para mostrar mensajes flotantes (Snackbars)
@@ -69,7 +69,7 @@ fun AddExpenseScreen(
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
 
-    // 🌟 LEEMOS EL BALANCE REAL DESDE EL HOMEVIEWMODEL DE MANERA REACTIVA
+    // Leemos el balance real desde el HomeViewModel de manera reactiva
     val balanceDisponibleHome = when (homeUiState) {
         is HomeUiState.Success -> (homeUiState as HomeUiState.Success).data.saldoDisponible
         else -> 0.0
@@ -80,7 +80,7 @@ fun AddExpenseScreen(
     ) { success ->
         if (success && pendingCameraUri != null) {
             photoUri = pendingCameraUri
-            addExpenseViewModel.onPhotoSelected(pendingCameraUri.toString())
+            viewModel.onPhotoSelected(pendingCameraUri.toString())
         }
     }
 
@@ -155,15 +155,9 @@ fun AddExpenseScreen(
                         } else if (!tieneSaldoSuficiente) {
                             scope.launch { snackbarHostState.showSnackbar("No tienes saldo suficiente en tu balance disponible para este gasto.") }
                         } else {
-                            // 🌟 1. ACTUALIZA EL HOME VIEWMODEL CON LOS DATOS REALES DEL GASTO
-                            homeViewModel.registrarNuevoGasto(
-                                monto = montoIngresado,
-                                categoriaId = uiState.categoriaId!!,
-                                nota = uiState.nota
-                            )
-
-                            // 🌟 2. PERSISTENCIA O FLUJO PROPIO DEL FORMULARIO ANTES DE SALIR
-                            addExpenseViewModel.guardarGasto(onSuccess = {
+                            // 🌟 SOLUCIÓN: Eliminamos la inserción manual duplicada de homeViewModel.registrarNuevoGasto
+                            // Dejamos que únicamente el AddExpenseViewModel asuma el flujo persistente con Room.
+                            viewModel.guardarGasto(onSuccess = {
                                 navController.popBackStack()
                             })
                         }
@@ -243,7 +237,7 @@ fun AddExpenseScreen(
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextDim)
             }
 
-            // --- Monto (Módulo Centralizado Corregido) ---
+            // --- Monto ---
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -263,7 +257,7 @@ fun AddExpenseScreen(
                         value = uiState.monto,
                         onValueChange = { nuevo ->
                             if (nuevo.isEmpty() || nuevo.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
-                                addExpenseViewModel.onMontoChange(nuevo)
+                                viewModel.onMontoChange(nuevo)
                             }
                         },
                         textStyle = androidx.compose.ui.text.TextStyle(
@@ -316,7 +310,7 @@ fun AddExpenseScreen(
                                             color = if (seleccionado) Purple else Color.Transparent,
                                             shape = RoundedCornerShape(14.dp)
                                         )
-                                        .clickable { addExpenseViewModel.onCategoriaSelected(cat.id) }
+                                        .clickable { viewModel.onCategoriaSelected(cat.id) }
                                         .padding(vertical = 14.dp, horizontal = 6.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -361,7 +355,7 @@ fun AddExpenseScreen(
                 )
                 OutlinedTextField(
                     value = uiState.nota,
-                    onValueChange = { addExpenseViewModel.onNotaChange(it) },
+                    onValueChange = { viewModel.onNotaChange(it) },
                     placeholder = { Text("Ej. Almuerzo con amigos", color = Color.White.copy(alpha = 0.20f), fontSize = 14.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

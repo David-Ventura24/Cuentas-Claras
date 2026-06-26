@@ -1,12 +1,12 @@
 package com.example.cuentas_clarasapp.screens.history
 
-
 import androidx.compose.ui.graphics.Color
 
 data class GastoHistorial(
     val id: String,
     val descripcion: String,
     val monto: Double,
+    val categoriaId: String,
     val categoria: String,
     val fecha: String,
     val colorCategoria: Color
@@ -15,6 +15,7 @@ data class GastoHistorial(
 data class HistoryData(
     val mesAnioFiltro: String = "Mayo 2026",
     val totalGastadoMes: Double = 313.00,
+    val totalAhorradoMes: Double? = 0.0,
     val transacciones: List<GastoHistorial> = emptyList()
 )
 

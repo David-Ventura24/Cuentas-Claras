@@ -8,3 +8,4 @@ data class GastoRegistrado(
     val fotoUri: String? = null,
     val fecha: Long = System.currentTimeMillis()
 )
+

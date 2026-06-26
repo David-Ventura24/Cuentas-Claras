@@ -23,62 +23,50 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.cuentas_clarasapp.components.CuentasClarasBottomNav
 
 private val Purple     = Color(0xFF985EFF)
 private val BgDark     = Color(0xFF111013)
 private val BgCard     = Color(0xFF1A1820)
-private val TextMuted  = Color(0x4DFFFFFF)
 private val TextDim    = Color(0x66FFFFFF)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
     navController : NavController,
-    viewModel: AnalyticsViewModel = viewModel() // Adaptado a AnalyticsViewModel
+    viewModel: AnalyticsViewModel = viewModel(),
+    paddingValues: PaddingValues = PaddingValues(0.dp) // Recibe los márgenes del Scaffold superior de la barra flotante
 ) {
     // Escucha reactiva del StateFlow bajo el ciclo de vida de la UI
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        containerColor = BgDark,
-        topBar = {
-            TopAppBar(
-                title = { Text("Cuentas Claras", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF2D1F54)) // Fondo morado oscuro superior del mockup
-            )
-        },
-        bottomBar = {
-            CuentasClarasBottomNav(navController = navController)
-        }
-    ) { innerPadding ->
+    // 🌟 Contenedor raíz limpio para evitar conflictos de layouts y permitir el scroll correcto
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BgDark)
+            .padding(paddingValues)
+    ) {
         when (val state = uiState) {
             is AnalyticsUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = Purple)
-                }
+                CircularProgressIndicator(
+                    color = Purple,
+                    modifier = Modifier.align(Alignment.Center)
+                )
             }
             is AnalyticsUiState.Success -> {
                 AnalyticsContent(
                     data = state.data,
-                    viewModel = viewModel,
-                    innerPadding = innerPadding
+                    viewModel = viewModel
                 )
             }
             is AnalyticsUiState.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = state.mensaje, color = Color.Red, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { viewModel.refrescarContenido() }) {
-                            Text("Reintentar")
-                        }
+                    Text(text = state.mensaje, color = Color.Red, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { viewModel.refrescarContenido() }) {
+                        Text("Reintentar")
                     }
                 }
             }
@@ -89,17 +77,15 @@ fun AnalyticsScreen(
 @Composable
 private fun AnalyticsContent(
     data: ExpenseAnalyticsData,
-    viewModel: AnalyticsViewModel,
-    innerPadding: PaddingValues
+    viewModel: AnalyticsViewModel
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(rememberScrollState()) // El scroll ahora responderá de forma nativa sin interrupciones
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = "Análisis de gastos",
@@ -192,7 +178,10 @@ private fun AnalyticsContent(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(40.dp))
+
+        // 🌟 Espaciador inferior clave para que los últimos elementos queden totalmente visibles
+        // por encima de tu barra de pestañas flotante.
+        Spacer(modifier = Modifier.height(110.dp))
     }
 }
 

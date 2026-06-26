@@ -11,7 +11,7 @@ composeBom = "2024.12.01"
 
 navigation = "2.8.5"
 ktor = "3.0.1"
-room = "2.6.1"
+room = "2.7.0-alpha11"
 ksp = "2.1.0-1.0.29"
 coil = "3.0.4"
 visionInternalVkp = "18.2.3"

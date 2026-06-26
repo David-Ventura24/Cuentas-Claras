@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint // ➔ NUEVO IMPORT
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
@@ -17,12 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext // ➔ NUEVO IMPORT
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity // ➔ NUEVO IMPORT
+import com.example.cuentas_clarasapp.utils.BiometricHelper // ➔ NUEVO IMPORT
 import kotlinx.coroutines.launch
 
 private val Purple = Color(0xFF985EFF)
@@ -41,6 +45,12 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    // Estados para control de Biometría 🌟
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    var errorBiometrico by remember { mutableStateOf("") }
+    val mostrarBotonBiometrico = remember { BiometricHelper.esBiometriaDisponible(context) }
 
     val alpha  = remember { Animatable(0f) }
     val slideY = remember { Animatable(20f) }
@@ -144,6 +154,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // --- Botón Registrarme ---
             OutlinedButton(
                 onClick = onNavigateToRegister,
                 modifier = Modifier
@@ -154,6 +165,55 @@ fun LoginScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0x73FFFFFF))
             ) {
                 Text("Registrarme", fontSize = 15.sp, fontWeight = FontWeight.Normal)
+            }
+
+            // ==========================================
+            // SECCIÓN BIOMÉTRICA (Huella / Face ID) 🌟
+            // ==========================================
+            if (mostrarBotonBiometrico && activity != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        BiometricHelper.iniciarAutenticacion(
+                            activity = activity,
+                            onSuccess = { result ->
+                                errorBiometrico = ""
+                                // Éxito nativo. Aquí tu compañero conectará las credenciales seguras
+                                onLoginSuccess()
+                            },
+                            onError = { mensaje ->
+                                errorBiometrico = mensaje
+                            }
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Purple.copy(alpha = 0.4f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Purple)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = "Login Biométrico",
+                        tint = Purple,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Ingresar con huella o rostro", fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                }
+            }
+
+            // Mensaje de error de biometría (si existiera)
+            if (errorBiometrico.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = errorBiometrico,
+                    color = Color.Red.copy(alpha = 0.8f),
+                    fontSize = 12.sp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
