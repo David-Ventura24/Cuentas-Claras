@@ -41,9 +41,14 @@ private val RedExpense = Color(0xFFFF5252) // Color rojo unificado de gastos
 @Composable
 fun HistoryScreen(
     navController: NavController,
-    viewModel: HistoryViewModel = viewModel(),
-    paddingValues: PaddingValues = PaddingValues(0.dp)
+    viewModel: HistoryViewModel,
+    paddingValues: PaddingValues = PaddingValues()
 ) {
+    // REFRESCAR AL VOLVER
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.refrescarContenido()
+        onPauseOrDispose { }
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Box(
@@ -104,7 +109,7 @@ private fun HistoryContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 🌟 CORREGIDO: Muestra dinámicamente tu acumulado de ahorros real
+        //  Muestra dinámicamente tu acumulado de ahorros real
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -207,7 +212,7 @@ private fun HistoryContent(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // RESUMEN: TOTAL GASTADO
+        // TOTAL GASTADO
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -280,7 +285,7 @@ private fun ItemTransaccionRow(transaccion: GastoHistorial) {
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 🌟 CORREGIDO: Mapeo exacto e independiente de íconos para evitar mezclas
+        //  Mapeo exacto e independiente de íconos para evitar mezclas
         val iconoCategoria = remember(transaccion.categoria) {
             when (transaccion.categoria.lowercase(Locale.getDefault()).trim()) {
                 "alimentación", "alimentacion" -> Icons.Default.Restaurant
@@ -324,7 +329,7 @@ private fun ItemTransaccionRow(transaccion: GastoHistorial) {
             )
         }
 
-        // 🌟 CORREGIDO: El monto ahora se muestra en color rojo (RedExpense)
+        //  El monto ahora se muestra en color rojo (RedExpense)
         Text(
             text = "-$${String.format(Locale.getDefault(), "%.2f", transaccion.monto)}",
             color = RedExpense,

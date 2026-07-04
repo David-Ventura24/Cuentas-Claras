@@ -25,6 +25,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 private val Purple      = Color(0xFF985EFF)
@@ -36,18 +37,16 @@ private val TextMuted   = Color(0x47FFFFFF)
 
 @Composable
 fun RegisterScreen(
+    viewModel: RegisterViewModel = viewModel(),
     onNavigateToLogin: () -> Unit,
     onRegisterSuccess: () -> Unit
 ) {
-    var nombre    by remember { mutableStateOf("") }
-    var email     by remember { mutableStateOf("") }
-    var password  by remember { mutableStateOf("") }
-    var confirm   by remember { mutableStateOf("") }
-
-    var passVisible    by remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
+    
+    var confirm by remember { mutableStateOf("") }
     var confirmVisible by remember { mutableStateOf(false) }
 
-    val passwordMismatch = confirm.isNotEmpty() && password != confirm
+    val passwordMismatch = confirm.isNotEmpty() && uiState.password != confirm
 
     val alpha  = remember { Animatable(0f) }
     val slideY = remember { Animatable(20f) }
@@ -94,12 +93,22 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(36.dp))
 
+            // --- Error Message ---
+            if (uiState.errorMessage != null) {
+                Text(
+                    text = uiState.errorMessage!!,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             // --- Nombre ---
             RegFieldLabel("Nombre")
             Spacer(modifier = Modifier.height(7.dp))
             OutlinedTextField(
-                value = nombre,
-                onValueChange = { nombre = it },
+                value = uiState.name,
+                onValueChange = { viewModel.onNameChange(it) },
                 placeholder = { Text("Tu nombre completo", color = Color(0x2EFFFFFF), fontSize = 15.sp) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
@@ -114,8 +123,8 @@ fun RegisterScreen(
             RegFieldLabel("Correo")
             Spacer(modifier = Modifier.height(7.dp))
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
+                value = uiState.email,
+                onValueChange = { viewModel.onEmailChange(it) },
                 placeholder = { Text("correo@ejemplo.com", color = Color(0x2EFFFFFF), fontSize = 15.sp) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -130,16 +139,16 @@ fun RegisterScreen(
             RegFieldLabel("Contraseña")
             Spacer(modifier = Modifier.height(7.dp))
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
+                value = uiState.password,
+                onValueChange = { viewModel.onPasswordChange(it) },
                 placeholder = { Text("Mínimo 8 caracteres", color = Color(0x2EFFFFFF), fontSize = 15.sp) },
                 singleLine = true,
-                visualTransformation = if (passVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                visualTransformation = if (uiState.passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = {
-                    IconButton(onClick = { passVisible = !passVisible }) {
+                    IconButton(onClick = { viewModel.onTogglePasswordVisibility() }) {
                         Icon(
-                            imageVector = if (passVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                            imageVector = if (uiState.passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                             contentDescription = null,
                             tint = Color(0x33FFFFFF),
                             modifier = Modifier.size(18.dp)
@@ -191,14 +200,14 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(28.dp))
 
             // --- Botón registrarse ---
-            val formValid = nombre.isNotBlank()
-                    && email.isNotBlank()
-                    && password.length >= 8
-                    && password == confirm
+            val formValid = uiState.name.isNotBlank()
+                    && uiState.email.isNotBlank()
+                    && uiState.password.length >= 8
+                    && uiState.password == confirm
 
             Button(
-                onClick = { if (formValid) onRegisterSuccess() },
-                enabled = formValid,
+                onClick = { viewModel.register(onRegisterSuccess) },
+                enabled = formValid && !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -210,7 +219,11 @@ fun RegisterScreen(
                     disabledContentColor = Color.White.copy(alpha = 0.40f)
                 )
             ) {
-                Text("Crear cuenta", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Crear cuenta", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

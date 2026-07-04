@@ -2,76 +2,93 @@ package com.example.cuentas_clarasapp.screens.expense
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
+import com.example.cuentas_clarasapp.data.api.expense.ExpenseRequestDto
+import com.example.cuentas_clarasapp.data.repositories.ExpenseRepository
+import com.example.cuentas_clarasapp.data.repositories.ExpenseApiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
 
 class AddExpenseViewModel(
-    private val repository: FinanzasRepository // 🌟 Inyección correcta de la instancia del repositorio
+    private val expenseRepository: ExpenseRepository = ExpenseApiRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddExpenseUiState())
     val uiState: StateFlow<AddExpenseUiState> = _uiState.asStateFlow()
 
-    fun onMontoChange(nuevoMonto: String) {
-        _uiState.update { it.copy(monto = nuevoMonto) }
+    fun onMontoChange(value: String) {
+        _uiState.update { it.copy(monto = value, montoError = null, presupuestoError = null) }
     }
 
-    fun onCategoriaSelected(categoriaId: String) {
-        _uiState.update { it.copy(categoriaId = categoriaId) }
+    fun onCategoriaSelected(id: String) {
+        _uiState.update { it.copy(categoriaId = id, categoriaError = null) }
     }
 
-    fun onNotaChange(nuevaNota: String) {
-        _uiState.update { it.copy(nota = nuevaNota) }
+    fun onNotaChange(value: String) {
+        _uiState.update { it.copy(nota = value) }
     }
 
-    fun onPhotoSelected(uri: String) {
-        _uiState.update { it.copy(fotoUri = uri) }
+    fun onFotoUriChange(value: String?) {
+        _uiState.update { it.copy(fotoUri = value) }
     }
 
     fun guardarGasto(onSuccess: () -> Unit) {
-        val currentState = _uiState.value
-        val montoInput = currentState.monto
-        val categoriaId = currentState.categoriaId ?: ""
-        val nota = currentState.nota
+        val state = _uiState.value
+        var tieneError = false
 
-        val montoFloat = montoInput.toFloatOrNull() ?: 0f
-
-        // Validaciones previas antes de tocar la base de datos
-        val montoError = if (montoFloat <= 0f) "El monto debe ser mayor a cero" else null
-        val categoriaError = if (categoriaId.isEmpty()) "Selecciona una categoría" else null
-
-        if (montoError != null || categoriaError != null) {
-            _uiState.update { it.copy(montoError = montoError, categoriaError = categoriaError) }
-            return
+        val montoDouble = state.monto.toDoubleOrNull()
+        if (montoDouble == null || montoDouble <= 0) {
+            _uiState.update { it.copy(montoError = "Ingresa un monto válido mayor a 0") }
+            tieneError = true
         }
 
+        if (state.categoriaId == null) {
+            _uiState.update { it.copy(categoriaError = "Selecciona una categoría") }
+            tieneError = true
+        }
+
+        if (tieneError) return
+
+        _uiState.update { it.copy(isSaving = true) }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
-            try {
-                val categoriaNombre = when (categoriaId) {
-                    "alimentacion" -> "Alimentación"
-                    "transporte"   -> "Transporte"
-                    "ocio"         -> "Ocio"
-                    "compras"      -> "Compras"
-                    "educacion"    -> "Educación"
-                    else           -> "Otros"
+            val idUsuarioReal = com.example.cuentas_clarasapp.data.api.ApiClient.obtenerUsuarioIdActual()
+
+            if (!expenseRepository.puedeRegistrarGasto(montoDouble!!, idUsuarioReal)) {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        presupuestoError = "No tienes suficiente presupuesto disponible"
+                    )
                 }
+                return@launch
+            }
 
-                repository.registrarGasto(
-                    descripcion = nota,
-                    monto = montoFloat.toDouble(),
-                    categoriaId = categoriaId,
-                    categoriaNombre = categoriaNombre
-                )
+            val requestDto = ExpenseRequestDto(
+                total_gastado = montoDouble,
+                categoria = state.categoriaId!!,
+                img = state.fotoUri ?: state.categoriaId,
+                fecha = "", // El servidor usará su propia hora ISO
+                id_usuario = idUsuarioReal
+            )
 
-                _uiState.update { it.copy(isSaving = false, guardadoExitoso = true) }
+            val resultado = expenseRepository.registrarGasto(requestDto)
+
+            if (resultado.isSuccess) {
+                _uiState.update { it.copy(isSaving = false) }
                 onSuccess()
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isSaving = false, presupuestoError = "Error al guardar localmente") }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        presupuestoError = resultado.exceptionOrNull()?.localizedMessage ?: "Error de red"
+                    )
+                }
             }
         }
     }

@@ -1,14 +1,19 @@
 package com.example.cuentas_clarasapp.screens.profile
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
+import com.example.cuentas_clarasapp.data.local.SessionManager
+import com.example.cuentas_clarasapp.data.repositories.ProfileRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ProfileViewModel : ViewModel() {
+class ProfileViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val profileRepository = ProfileRepository()
+    private val sessionManager = SessionManager(application.applicationContext)
 
     private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -17,26 +22,34 @@ class ProfileViewModel : ViewModel() {
         cargarDatosUsuario()
     }
 
-    private fun cargarDatosUsuario() {
+    fun cargarDatosUsuario() {
         viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
             try {
-                // Simulamos la lectura de la base de datos de Room
-                delay(800)
-                _uiState.value = ProfileUiState.Success(
-                    nombre = "David Montoya",
-                    carrera = "Informatics Engineering",
-                    moneda = "USD ($)",
-                    estadoCuenta = "Activa"
-                )
+                val resultado = profileRepository.obtenerPerfil()
+                if (resultado.isSuccess) {
+                    val dto = resultado.getOrNull()
+                    if (dto != null) {
+                        _uiState.value = ProfileUiState.Success(
+                            nombre = dto.nombre,
+                            carrera = dto.carrera,
+                            moneda = dto.moneda,
+                            estadoCuenta = dto.estadoCuenta
+                        )
+                    }
+                } else {
+                    _uiState.value = ProfileUiState.Error("Error al cargar perfil")
+                }
             } catch (e: Exception) {
-                _uiState.value = ProfileUiState.Error("No se pudieron cargar los datos")
+                _uiState.value = ProfileUiState.Error("No se pudieron cargar los datos: ${e.message}")
             }
         }
     }
 
-    fun cerrarSesion() {
+    fun cerrarSesion(onNavigateToLogin: () -> Unit) {
         viewModelScope.launch {
-            // Aquí irá la lógica para limpiar las SharedPreferences o borrar el token de sesión
+            sessionManager.cerrarSesion()
+            onNavigateToLogin()
         }
     }
 }

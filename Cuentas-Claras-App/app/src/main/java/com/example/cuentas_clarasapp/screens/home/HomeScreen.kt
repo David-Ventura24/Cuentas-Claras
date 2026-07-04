@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.cuentas_clarasapp.navigation.Routes
 import java.util.Locale
+import kotlin.math.floor
 
 private val Purple         = Color(0xFF985EFF)
 private val BgDark         = Color(0xFF111013)
@@ -58,9 +60,15 @@ fun obtenerIconoCategoriaHome(id: String): ImageVector {
 fun HomeScreen(
     navController: NavController,
     viewModel: HomeViewModel,
-    paddingValues: PaddingValues,
+    paddingValues: PaddingValues = PaddingValues(),
     onFabVisibilityChange: (Boolean) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.cargarDatosFinancieros()
+        onPauseOrDispose { }
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -112,25 +120,38 @@ fun HomeScreen(
         is HomeUiState.Success -> {
             val datos = (uiState as HomeUiState.Success).data
 
-            val saldoDisponible = datos.saldoDisponible
+            val saldoDisponible = datos.saldoDisponible.coerceAtLeast(0.0)
             val porcentajeAhorro = datos.porcentajeAhorro
             val periodo = datos.periodoPresupuesto
             val gastoDiarioActual = datos.gastoDiarioActual
             val montoInicialConfigurado = datos.montoInicialConfigurado
-            val limiteDiarioInicial = datos.limiteDiarioInicial
+            val limiteDiarioBase = datos.limiteDiarioInicial
 
+            // LÍMITE DINÁMICO: Restamos lo que ya gastaste hoy
+            val limiteRestanteHoy = (limiteDiarioBase - gastoDiarioActual).coerceAtLeast(0.0)
+            // No podemos sugerir gastar más de lo que nos queda en el balance total
+            val disponibleParaGastarHoy = kotlin.math.min(limiteRestanteHoy, saldoDisponible)
             val montoAhorradoMeta = montoInicialConfigurado * (porcentajeAhorro / 100.0)
 
-            val dineroRestanteHoy = (limiteDiarioInicial - gastoDiarioActual).coerceAtLeast(0.0)
-            val seExcedioLimiteDiario = gastoDiarioActual > limiteDiarioInicial && limiteDiarioInicial > 0.0
+            val seExcedioLimiteDiario = gastoDiarioActual > limiteDiarioBase && limiteDiarioBase > 0.0
 
-            val porcentajeRestanteDiarioFlotante = if (limiteDiarioInicial > 0.0 && !seExcedioLimiteDiario) {
-                (dineroRestanteHoy / limiteDiarioInicial).toFloat().coerceIn(0f, 1f)
+            // Ahora la barra mide el Balance Disponible total (no el límite diario)
+            val porcentajeRestanteTotalFlotante = if (montoInicialConfigurado > 0.0) {
+                // Calculamos el porcentaje real basado en el Saldo Disponible total
+                val realP = (saldoDisponible / montoInicialConfigurado).coerceIn(0.0, 1.0)
+                
+                // Aplicamos la optimización de bajar de 10 en 10%
+                ((floor(realP * 10.0) * 10.0) / 100.0).toFloat()
             } else 0f
 
-            val porcentajeRestanteGeneral = if (montoInicialConfigurado > 0) {
-                ((saldoDisponible / montoInicialConfigurado) * 100).toInt()
-            } else 0
+            // Basada puramente en el Balance Disponible
+            val colorDinamico = when {
+                porcentajeRestanteTotalFlotante > 0.5f -> GreenProgress
+                porcentajeRestanteTotalFlotante > 0.2f -> OrangeWarning
+                else -> RedExpense
+            }
+
+            val porcentajeRestanteGeneral = ((porcentajeRestanteTotalFlotante) * 100).toInt()
 
             LazyColumn(
                 state = listState,
@@ -145,12 +166,14 @@ fun HomeScreen(
 
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Hola, David ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Hola, ${datos.nombreUsuario}", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (periodo != "Sin configurar") "$porcentajeRestanteGeneral% de tu presupuesto disponible" else "Sin presupuesto activo",
@@ -188,7 +211,9 @@ fun HomeScreen(
 
                 item {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(text = "Balance disponible", color = TextMuted, fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -221,7 +246,7 @@ fun HomeScreen(
                         )
 
                         Text(
-                            text = "$${String.format(Locale.getDefault(), "%.2f", limiteDiarioInicial)}",
+                            text = "$${String.format(Locale.getDefault(), "%.2f", limiteDiarioBase)}",
                             color = Color.White,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Black
@@ -239,17 +264,20 @@ fun HomeScreen(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = if (seExcedioLimiteDiario) "¡Cupo Agotado!" else "${((porcentajeRestanteDiarioFlotante) * 100).toInt()}% disponible",
-                                color = if (seExcedioLimiteDiario) RedExpense else GreenProgress,
+                                text = "$porcentajeRestanteGeneral% disponible",
+                                color = colorDinamico,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
                         LinearProgressIndicator(
-                            progress = { porcentajeRestanteDiarioFlotante },
-                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
-                            color = if (seExcedioLimiteDiario) RedExpense else Purple,
+                            progress = { porcentajeRestanteTotalFlotante },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(CircleShape),
+                            color = colorDinamico,
                             trackColor = Color.White.copy(alpha = 0.06f)
                         )
 
@@ -260,7 +288,7 @@ fun HomeScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = "Gastado",
+                                    text = "Gastado hoy",
                                     color = Color.White.copy(alpha = 0.6f),
                                     fontSize = 12.sp
                                 )
@@ -273,13 +301,14 @@ fun HomeScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = "Meta Ahorro",
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    fontSize = 12.sp
+                                    text = "Disponible",
+                                    color = GreenProgress,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "$${String.format(Locale.getDefault(), "%.2f", montoAhorradoMeta)}",
-                                    color = Purple,
+                                    text = "$${String.format(Locale.getDefault(), "%.2f", saldoDisponible)}",
+                                    color = Color.White,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -363,7 +392,7 @@ fun GastoItemRow(gasto: GastoItemHome) {
             }
         }
 
-        // 🌟 CORREGIDO: Resalta las bajas / flujos negativos en color rojo
+        // Resalta las bajas / flujos negativos en color rojo
         Text(
             text = "-$${String.format(Locale.getDefault(), "%.2f", gasto.monto)}",
             color = RedExpense,

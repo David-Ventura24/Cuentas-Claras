@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,8 +55,8 @@ data class CategoriaItem(
 @Composable
 fun AddExpenseScreen(
     navController: NavController,
-    homeViewModel: HomeViewModel, // 🌟 Monitorea el saldo del Home
-    viewModel: AddExpenseViewModel // 🌟 Gestiona la inserción limpia en Room
+    homeViewModel: HomeViewModel, //  Monitorea el saldo del Home
+    viewModel: AddExpenseViewModel //  Gestiona la inserción limpia en Room
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -80,7 +81,7 @@ fun AddExpenseScreen(
     ) { success ->
         if (success && pendingCameraUri != null) {
             photoUri = pendingCameraUri
-            viewModel.onPhotoSelected(pendingCameraUri.toString())
+            viewModel.onFotoUriChange(pendingCameraUri.toString())
         }
     }
 
@@ -136,8 +137,16 @@ fun AddExpenseScreen(
             TopAppBar(
                 title = { Text("Nuevo gasto", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = Color.White)
+                    IconButton(
+                        onClick = { navController.popBackStack() },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Regresar",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BgDark)
@@ -155,9 +164,8 @@ fun AddExpenseScreen(
                         } else if (!tieneSaldoSuficiente) {
                             scope.launch { snackbarHostState.showSnackbar("No tienes saldo suficiente en tu balance disponible para este gasto.") }
                         } else {
-                            // 🌟 SOLUCIÓN: Eliminamos la inserción manual duplicada de homeViewModel.registrarNuevoGasto
-                            // Dejamos que únicamente el AddExpenseViewModel asuma el flujo persistente con Room.
                             viewModel.guardarGasto(onSuccess = {
+                                homeViewModel.cargarDatosFinancieros()
                                 navController.popBackStack()
                             })
                         }

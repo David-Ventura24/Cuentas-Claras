@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 class FinanzasRepository(
     private val gastoDao: GastoDao,
-    private val ahorroDao: AhorroDao // 🌟 Agregado el nuevo DAO
+    private val ahorroDao: AhorroDao //  Agregado el nuevo DAO
 ) {
     // Lógica existente de Gastos
     val todosLosGastos: Flow<List<GastoEntity>> = gastoDao.obtenerTodosLosGastosFlow()
@@ -34,7 +34,7 @@ class FinanzasRepository(
         insertarGasto(nuevoGasto)
     }
 
-    // 🌟 NUEVA LÓGICA DE AHORROS
+    //  NUEVA LÓGICA DE AHORROS
     val todosLosMovimientosAhorro: Flow<List<AhorroEntity>> = ahorroDao.obtenerTodosLosMovimientos()
     val ahorroGlobalNeto: Flow<Double?> = ahorroDao.obtenerAhorroGlobalNeto()
 
@@ -42,7 +42,7 @@ class FinanzasRepository(
         ahorroDao.insertarMovimiento(movimiento)
     }
 
-    // 🌟 LÓGICA DE PRESUPUESTO
+    //  LÓGICA DE PRESUPUESTO
     val presupuestoActivo: Flow<PresupuestoEntity?> = gastoDao.obtenerPresupuestoFlow()
 
     suspend fun guardarConfiguracionPresupuesto(

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.example.cuentas_clarasapp.navigation.Routes
 
 private val BgDark  = Color(0xFF111013)
 private val BgCard  = Color(0xFF1A1820)
@@ -95,7 +96,13 @@ fun ProfileScreen(
                         }
 
                         Button(
-                            onClick = { viewModel.cerrarSesion() },
+                            onClick = {
+                                viewModel.cerrarSesion {
+                                    navController.navigate(Routes.Login) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252).copy(alpha = 0.1f)),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth().height(54.dp)

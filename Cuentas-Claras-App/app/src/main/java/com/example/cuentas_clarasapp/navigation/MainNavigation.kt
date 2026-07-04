@@ -7,14 +7,11 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.cuentas_clarasapp.data.local.AppDatabase
-import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
+import com.example.cuentas_clarasapp.data.local.SessionManager
 import com.example.cuentas_clarasapp.screens.auth.SplashScreen
 import com.example.cuentas_clarasapp.screens.auth.LoginScreen
 import com.example.cuentas_clarasapp.screens.auth.RegisterScreen
@@ -37,165 +34,69 @@ import com.example.cuentas_clarasapp.screens.savings.SavingsViewModel
 fun MainNavigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
+    val sessionManager = SessionManager(context)
+    val token = sessionManager.obtenerToken()
 
-    // 1. Inicializar la base de datos de Room y el repositorio de forma centralizada con ambos DAOs
-    val database = AppDatabase.getDatabase(context)
-    val repository = FinanzasRepository(database.gastoDao(), database.ahorroDao()) // 🌟 CORREGIDO: Se inyecta ahorroDao
-
-    // 2. Inyección correcta usando Factory para el HomeViewModel (Compartido)
-    val sharedHomeViewModel: HomeViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(repository) as T
-            }
-        }
-    )
+    // ViewModel compartido para el Home
+    val sharedHomeViewModel: HomeViewModel = viewModel()
 
     NavHost(
         navController = navController,
-        startDestination = Routes.Splash,
-
-        enterTransition = {
-            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(400)) +
-                    fadeIn(animationSpec = tween(400))
-        },
-        exitTransition = {
-            slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(400)) +
-                    fadeOut(animationSpec = tween(400))
-        },
-        popEnterTransition = {
-            slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(400)) +
-                    fadeIn(animationSpec = tween(400))
-        },
-        popExitTransition = {
-            slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(400)) +
-                    fadeOut(animationSpec = tween(400))
-        }
+        startDestination = if (token != null) Routes.Home else Routes.Splash,
+        enterTransition = { slideInHorizontally(animationSpec = tween(400)) + fadeIn() },
+        exitTransition = { slideOutHorizontally(animationSpec = tween(400)) + fadeOut() }
     ) {
-        // --- PANTALLA DE SPLASH ---
         composable<Routes.Splash> {
-            SplashScreen(
-                onNavigateToLogin = {
-                    navController.navigate(Routes.Login) {
-                        popUpTo(Routes.Splash) { inclusive = true }
-                    }
-                }
-            )
+            SplashScreen(onNavigateToLogin = {
+                navController.navigate(Routes.Login) { popUpTo(Routes.Splash) { inclusive = true } }
+            })
         }
 
-        // --- PANTALLA DE LOGIN ---
         composable<Routes.Login> {
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Routes.Register) },
-                onNavigateToForgotPassword = { /* TODO */ },
+                onNavigateToForgotPassword = { /* TODO: Implementar si tienes la ruta */ },
                 onLoginSuccess = {
-                    navController.navigate(Routes.Home) {
-                        popUpTo(Routes.Login) { inclusive = true }
-                    }
+                    navController.navigate(Routes.Home) { popUpTo(Routes.Login) { inclusive = true } }
                 }
             )
         }
 
-        // --- PANTALLA DE REGISTRO ---
         composable<Routes.Register> {
             RegisterScreen(
                 onNavigateToLogin = { navController.popBackStack() },
                 onRegisterSuccess = {
-                    navController.navigate(Routes.Home) {
-                        popUpTo(Routes.Register) { inclusive = true }
-                    }
+                    navController.navigate(Routes.Home) { popUpTo(Routes.Register) { inclusive = true } }
                 }
             )
         }
 
-        // --- PANTALLA PRINCIPAL CON CONTENEDOR DE PESTAÑAS ---
         composable<Routes.Home> {
-            MainTabsScreen(
-                navController = navController,
-                homeViewModel = sharedHomeViewModel
-            )
+            MainTabsScreen(navController = navController, homeViewModel = sharedHomeViewModel)
         }
 
-        // --- PANTALLA DE NOTIFICACIONES ---
         composable<Routes.Notifications> {
-            val notificationViewModel: NotificationViewModel = viewModel()
-            NotificationScreen(
-                navController = navController,
-                notificationViewModel = notificationViewModel,
-                homeViewModel = sharedHomeViewModel
-            )
+            NotificationScreen(navController = navController, notificationViewModel = viewModel(), homeViewModel = sharedHomeViewModel)
         }
 
-        // --- PANTALLA DE PERFIL ---
         composable<Routes.Profile> {
-            val profileViewModel: ProfileViewModel = viewModel()
-            ProfileScreen(
-                navController = navController,
-                viewModel = profileViewModel
-            )
+            ProfileScreen(navController = navController, viewModel = viewModel())
         }
 
-        // --- PANTALLA DE INGRESAR NUEVO GASTO ---
         composable<Routes.AddExpense> {
-            val addExpenseViewModel: AddExpenseViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return AddExpenseViewModel(repository) as T
-                    }
-                }
-            )
-
-            AddExpenseScreen(
-                navController = navController,
-                homeViewModel = sharedHomeViewModel,
-                viewModel = addExpenseViewModel
-            )
+            AddExpenseScreen(navController = navController, homeViewModel = sharedHomeViewModel, viewModel = viewModel())
         }
 
-        // --- PANTALLA DE ANÁLISIS Y GRÁFICAS ---
         composable<Routes.Analytics> {
-            val analyticsViewModel: AnalyticsViewModel = viewModel()
-            AnalyticsScreen(
-                navController = navController,
-                viewModel = analyticsViewModel
-            )
+            AnalyticsScreen(navController = navController, viewModel = viewModel())
         }
 
-        // --- PANTALLA DE HISTORIAL ---
         composable<Routes.History> {
-            val historyViewModel: HistoryViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return HistoryViewModel(repository) as T
-                    }
-                }
-            )
-
-            HistoryScreen(
-                navController = navController,
-                viewModel = historyViewModel
-            )
+            HistoryScreen(navController = navController, viewModel = viewModel())
         }
 
-        // --- PANTALLA DE AHORRO GLOBAL (NUEVA) ---
         composable<Routes.GlobalSavings> {
-            // 🌟 INYECCIÓN SEGURA: Se inyecta correctamente el repositorio al SavingsViewModel mediante Factory
-            val savingsViewModel: SavingsViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return SavingsViewModel(repository) as T
-                    }
-                }
-            )
-
-            GlobalSavingsScreen(
-                navController = navController,
-                viewModel = savingsViewModel
-            )
+            GlobalSavingsScreen(navController = navController, viewModel = viewModel())
         }
     }
 }

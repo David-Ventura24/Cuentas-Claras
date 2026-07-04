@@ -2,58 +2,63 @@ package com.example.cuentas_clarasapp.screens.savings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuentas_clarasapp.data.repositories.SavingsRepository
 import com.example.cuentas_clarasapp.data.local.entities.AhorroEntity
-import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import java.time.Instant
+import com.example.cuentas_clarasapp.data.api.savings.AhorroNetDto
 
-class SavingsViewModel(
-    private val repository: FinanzasRepository
-) : ViewModel() {
+class SavingsViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow<SavingsUiState>(SavingsUiState.Loading)
     val uiState: StateFlow<SavingsUiState> = _uiState.asStateFlow()
 
     init {
-        escucharDatosAhorro()
+        cargarAhorros()
     }
 
-    private fun escucharDatosAhorro() {
+    fun refrescarAhorros() {
+        cargarAhorros()
+    }
+
+    private fun cargarAhorros() {
         viewModelScope.launch {
             _uiState.value = SavingsUiState.Loading
             try {
-                // Combinamos de forma reactiva el balance neto total con la lista de movimientos históricos
-                combine(
-                    repository.ahorroGlobalNeto,
-                    repository.todosLosMovimientosAhorro
-                ) { neto, movimientos ->
-                    SavingsUiState.Success(
-                        ahorroGlobalNeto = neto ?: 0.0,
-                        listaMovimientos = movimientos
+                val repository = SavingsRepository()
+                val resultado = repository.obtenerStatusAhorro()
+
+                if (resultado.isSuccess) {
+                    val dto = resultado.getOrNull()!!
+                    val listaMapeada = dto.movimientos.map { m ->
+                        AhorroEntity(
+                            monto = m.monto,
+                            tipo = m.tipo,
+                            nota = m.nota,
+                            fechaLong = try {
+                                java.time.OffsetDateTime.parse(m.fecha).toInstant().toEpochMilli()
+                            } catch (e: Exception) {
+                                System.currentTimeMillis()
+                            }
+                        )
+                    }
+                    _uiState.value = SavingsUiState.Success(
+                        ahorroGlobalNeto = dto.ahorro_neto,
+                        listaMovimientos = listaMapeada
                     )
-                }.collect { estadoCombinado ->
-                    _uiState.value = estadoCombinado
+                } else {
+                    val err = resultado.exceptionOrNull()?.message ?: "Error al obtener ahorros"
+                    _uiState.value = SavingsUiState.Error(err)
                 }
             } catch (e: Exception) {
-                _uiState.value = SavingsUiState.Error("Error al cargar ahorros: ${e.message}")
+                _uiState.value = SavingsUiState.Error("Excepción: ${e.message}")
             }
         }
     }
 
     fun realizarRetiroEmergencia(monto: Double, motivo: String) {
-        if (monto <= 0) return
-        viewModelScope.launch {
-            val retiro = AhorroEntity(
-                monto = monto,
-                tipo = "RETIRO",
-                nota = motivo.ifBlank { "Retiro de emergencia" },
-                fechaLong = Instant.now().toEpochMilli()
-            )
-            repository.registrarMovimientoAhorro(retiro)
-        }
+        // TODO
     }
 }

@@ -37,6 +37,12 @@ fun GlobalSavingsScreen(
     navController: NavController,
     viewModel: SavingsViewModel
 ) {
+    //  Sincronizar datos al entrar
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        viewModel.refrescarAhorros()
+        onPauseOrDispose { }
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var mostrarDialogoRetiro by remember { mutableStateOf(false) }
 

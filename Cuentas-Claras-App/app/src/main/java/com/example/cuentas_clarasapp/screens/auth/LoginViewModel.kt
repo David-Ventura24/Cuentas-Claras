@@ -1,15 +1,19 @@
 package com.example.cuentas_clarasapp.screens.auth
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
+import com.example.cuentas_clarasapp.data.api.auth.LoginRequestDto
+import com.example.cuentas_clarasapp.data.repositories.AuthApiRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class LoginViewModel : ViewModel() {
+class LoginViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val authRepository = AuthApiRepository(application.applicationContext)
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -36,9 +40,21 @@ class LoginViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            delay(1000) // Simula llamada al backend
+            
+            val request = LoginRequestDto(
+                correo_electronico = state.email,
+                contrasena = state.password
+            )
+            
+            val respuesta = authRepository.login(request)
+            
             _uiState.update { it.copy(isLoading = false) }
-            onSuccess()
+            
+            if (respuesta.error == null && respuesta.token != null) {
+                onSuccess()
+            } else {
+                _uiState.update { it.copy(errorMessage = respuesta.error ?: "Error al iniciar sesión") }
+            }
         }
     }
 }

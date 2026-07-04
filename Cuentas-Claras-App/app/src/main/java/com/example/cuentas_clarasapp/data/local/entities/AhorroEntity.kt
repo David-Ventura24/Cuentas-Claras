@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 data class AhorroEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val monto: Double,
-    val tipo: String, // "INGRESO" o "RETIRO"
-    val nota: String, // Ej: "Ahorro automático Mayo 2026" o "Retiro de emergencia"
+    val tipo: String,
+    val nota: String,
     val fechaLong: Long
 )

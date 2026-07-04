@@ -9,6 +9,7 @@ data class GastoItemHome(
 )
 
 data class HomeData(
+    val nombreUsuario: String = "Usuario",
     val saldoDisponible: Double,
     val periodoPresupuesto: String,
     val porcentajeAhorro: Int,

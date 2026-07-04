@@ -104,35 +104,14 @@ fun MainTabsScreen(
                         paddingValues = innerPadding,
                         onFabVisibilityChange = { visible -> fabVisible = visible }
                     )
+                    // Cambia los bloques del when(page) por esto:
                     1 -> {
-                        val historyViewModel: HistoryViewModel = viewModel(
-                            factory = object : ViewModelProvider.Factory {
-                                @Suppress("UNCHECKED_CAST")
-                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    return HistoryViewModel(repository) as T
-                                }
-                            }
-                        )
-                        HistoryScreen(
-                            navController = navController,
-                            viewModel = historyViewModel,
-                            paddingValues = innerPadding
-                        )
+                        val historyViewModel: HistoryViewModel = viewModel() //  Sin Factory
+                        HistoryScreen(navController = navController, viewModel = historyViewModel, paddingValues = innerPadding)
                     }
                     2 -> {
-                        val analyticsViewModel: AnalyticsViewModel = viewModel(
-                            factory = object : ViewModelProvider.Factory {
-                                @Suppress("UNCHECKED_CAST")
-                                override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                                    return AnalyticsViewModel(repository) as T
-                                }
-                            }
-                        )
-                        AnalyticsScreen(
-                            navController = navController,
-                            viewModel = analyticsViewModel,
-                            paddingValues = innerPadding
-                        )
+                        val analyticsViewModel: AnalyticsViewModel = viewModel() //  Sin Factory
+                        AnalyticsScreen(navController = navController, viewModel = analyticsViewModel, paddingValues = innerPadding)
                     }
                     3 -> {
                         BudgetScreen(

@@ -26,6 +26,7 @@ import com.example.cuentas_clarasapp.screens.home.HomeUiState
 import com.example.cuentas_clarasapp.screens.home.HomeViewModel
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.text.toFloatOrNull
 
 private val Purple    = Color(0xFF985EFF)
 private val BgDark    = Color(0xFF111013)
@@ -217,18 +218,23 @@ fun BudgetScreen(
                                     onClick = {
                                         val monto = montoInput.toFloatOrNull() ?: 0f
                                         if (monto > 0f && !isSaving) {
-                                            scope.launch {
-                                                isSaving = true
-                                                homeViewModel.actualizarPresupuestoDesdeConfiguracion(
-                                                    montoAInyectar = monto,
-                                                    nuevoPeriodo = periodoSeleccionado,
-                                                    nuevoPorcentajeAhorro = porcentajeAhorro
-                                                )
-                                                snackbarHostState.showSnackbar("¡Presupuesto inicial guardado!")
-                                                montoInput = ""
-                                                isSaving = false
-                                                navController.popBackStack()
-                                            }
+                                            isSaving = true // Bloqueamos el botón
+                                            homeViewModel.actualizarPresupuestoDesdeConfiguracion(
+                                                montoAInyectar = monto,
+                                                nuevoPeriodo = periodoSeleccionado,
+                                                nuevoPorcentajeAhorro = porcentajeAhorro,
+                                                onSuccess = {
+                                                    isSaving = false
+                                                    montoInput = ""
+                                                    navController.popBackStack() //  Solo volvemos si el server dijo OK
+                                                },
+                                                onError = { error ->
+                                                    scope.launch {
+                                                        isSaving = false
+                                                        snackbarHostState.showSnackbar(error)
+                                                    }
+                                                }
+                                            )
                                         }
                                     },
                                     enabled = (montoInput.toFloatOrNull() ?: 0f) > 0f && !isSaving,
@@ -307,7 +313,7 @@ fun BudgetScreen(
                                     )
                                 }
 
-                                // Permite cambiar el periodo a mitad del ciclo activo 🌟
+                                // Permite cambiar el periodo a mitad del ciclo activo
                                 Column(
                                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(BgCard).padding(18.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -332,7 +338,7 @@ fun BudgetScreen(
                                     }
                                 }
 
-                                // Permite cambiar el porcentaje a mitad del ciclo activo 🌟
+                                // Permite cambiar el porcentaje a mitad del ciclo activo
                                 Column(
                                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(BgCard).padding(18.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -357,21 +363,28 @@ fun BudgetScreen(
                                 Button(
                                     onClick = {
                                         val monto = montoInput.toFloatOrNull() ?: 0f
-                                        scope.launch {
-                                            isSaving = true
+                                        isSaving = true
 
-                                            // Mandamos todo junto al ViewModel para recalcular Room limpiamente
-                                            homeViewModel.actualizarPresupuestoDesdeConfiguracion(
-                                                montoAInyectar = monto,
-                                                nuevoPeriodo = periodoSeleccionado,
-                                                nuevoPorcentajeAhorro = porcentajeAhorro
-                                            )
-
-                                            snackbarHostState.showSnackbar("¡Ciclo recalibrado correctamente!")
-                                            montoInput = ""
-                                            isSaving = false
-                                            pantallaModo = BudgetScreenMode.VISTA_DETALLE
-                                        }
+                                        // Mandamos todo junto al ViewModel para recalcular Room limpiamente
+                                        homeViewModel.actualizarPresupuestoDesdeConfiguracion(
+                                            montoAInyectar = monto,
+                                            nuevoPeriodo = periodoSeleccionado,
+                                            nuevoPorcentajeAhorro = porcentajeAhorro,
+                                            onSuccess = {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("¡Ciclo recalibrado correctamente!")
+                                                    montoInput = ""
+                                                    isSaving = false
+                                                    pantallaModo = BudgetScreenMode.VISTA_DETALLE
+                                                }
+                                            },
+                                            onError = { error ->
+                                                scope.launch {
+                                                    isSaving = false
+                                                    snackbarHostState.showSnackbar(error)
+                                                }
+                                            }
+                                        )
                                     },
                                     modifier = Modifier.fillMaxWidth().height(54.dp),
                                     shape = RoundedCornerShape(14.dp),

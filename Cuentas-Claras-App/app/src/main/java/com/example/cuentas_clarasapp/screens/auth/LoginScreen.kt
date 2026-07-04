@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint // ➔ NUEVO IMPORT
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
@@ -18,15 +18,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext // ➔ NUEVO IMPORT
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.fragment.app.FragmentActivity // ➔ NUEVO IMPORT
-import com.example.cuentas_clarasapp.utils.BiometricHelper // ➔ NUEVO IMPORT
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.cuentas_clarasapp.utils.BiometricHelper
 import kotlinx.coroutines.launch
 
 private val Purple = Color(0xFF985EFF)
@@ -38,15 +39,14 @@ private val TextMuted = Color(0x47FFFFFF)
 
 @Composable
 fun LoginScreen(
+    viewModel: LoginViewModel = viewModel(),
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     onLoginSuccess: () -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
 
-    // Estados para control de Biometría 🌟
+    // Estados para control de Biometría
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     var errorBiometrico by remember { mutableStateOf("") }
@@ -94,12 +94,22 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(36.dp))
 
+            // --- Error Message ---
+            if (uiState.errorMessage != null) {
+                Text(
+                    text = uiState.errorMessage!!,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             // --- Correo ---
             FieldLabel("Correo")
             Spacer(modifier = Modifier.height(7.dp))
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
+                value = uiState.email,
+                onValueChange = { viewModel.onEmailChange(it) },
                 placeholder = { Text("correo@ejemplo.com", color = Color(0x2EFFFFFF), fontSize = 15.sp) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -114,16 +124,16 @@ fun LoginScreen(
             FieldLabel("Contraseña")
             Spacer(modifier = Modifier.height(7.dp))
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
+                value = uiState.password,
+                onValueChange = { viewModel.onPasswordChange(it) },
                 placeholder = { Text("••••••••", color = Color(0x2EFFFFFF), fontSize = 15.sp) },
                 singleLine = true,
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                visualTransformation = if (uiState.passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(onClick = { viewModel.onTogglePasswordVisibility() }) {
                         Icon(
-                            imageVector = if (passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
+                            imageVector = if (uiState.passwordVisible) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
                             contentDescription = null,
                             tint = Color(0x33FFFFFF),
                             modifier = Modifier.size(18.dp)
@@ -139,7 +149,8 @@ fun LoginScreen(
 
             // --- Botón principal ---
             Button(
-                onClick = onLoginSuccess,
+                onClick = { viewModel.login(onLoginSuccess) },
+                enabled = !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -149,7 +160,11 @@ fun LoginScreen(
                     contentColor = Color.White
                 )
             ) {
-                Text("Iniciar sesión", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Iniciar sesión", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -168,7 +183,7 @@ fun LoginScreen(
             }
 
             // ==========================================
-            // SECCIÓN BIOMÉTRICA (Huella / Face ID) 🌟
+            // SECCIÓN BIOMÉTRICA (Huella / Face ID)
             // ==========================================
             if (mostrarBotonBiometrico && activity != null) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -179,8 +194,7 @@ fun LoginScreen(
                             activity = activity,
                             onSuccess = { result ->
                                 errorBiometrico = ""
-                                // Éxito nativo. Aquí tu compañero conectará las credenciales seguras
-                                onLoginSuccess()
+                                viewModel.login(onLoginSuccess)
                             },
                             onError = { mensaje ->
                                 errorBiometrico = mensaje
@@ -205,7 +219,7 @@ fun LoginScreen(
                 }
             }
 
-            // Mensaje de error de biometría (si existiera)
+            // Mensaje de error de biometría
             if (errorBiometrico.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(

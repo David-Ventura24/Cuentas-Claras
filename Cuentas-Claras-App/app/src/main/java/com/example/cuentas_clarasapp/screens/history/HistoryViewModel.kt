@@ -1,110 +1,83 @@
 package com.example.cuentas_clarasapp.screens.history
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.cuentas_clarasapp.data.local.entities.GastoEntity
-import com.example.cuentas_clarasapp.data.repositories.FinanzasRepository
-import kotlinx.coroutines.Job
+import com.example.cuentas_clarasapp.data.repositories.HistoryRepository
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 class HistoryViewModel(
-    private val repository: FinanzasRepository
+    private val historyRepository: HistoryRepository = HistoryRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HistoryUiState>(HistoryUiState.Loading)
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
 
-    private var fechaFiltroActual = LocalDate.now()
-    private val formatterMeseAnio = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "ES"))
-    
-    private var observationJob: Job? = null
+    private var fechaActual = YearMonth.now()
 
     init {
-        escucharDatos()
-    }
-
-    fun refrescarContenido() {
-        escucharDatos()
+        cargarHistorial()
     }
 
     fun cambiarMes(avanzar: Boolean) {
-        fechaFiltroActual = if (avanzar) {
-            fechaFiltroActual.plusMonths(1)
-        } else {
-            fechaFiltroActual.minusMonths(1)
-        }
-        escucharDatos()
+        fechaActual = if (avanzar) fechaActual.plusMonths(1) else fechaActual.minusMonths(1)
+        cargarHistorial()
     }
 
-    private fun escucharDatos() {
-        observationJob?.cancel()
-        observationJob = viewModelScope.launch {
+    fun refrescarContenido() {
+        cargarHistorial()
+    }
+
+    private fun cargarHistorial() {
+        viewModelScope.launch {
             _uiState.value = HistoryUiState.Loading
             try {
-                combine(
-                    repository.todosLosGastos,
-                    repository.todosLosMovimientosAhorro
-                ) { listaGastos, listaAhorros ->
-                    
-                    val gastosFiltrados = listaGastos.filter { gasto ->
-                        val fechaGasto = Instant.ofEpochMilli(gasto.fechaLong)
-                            .atZone(ZoneId.systemDefault())
-                            .toLocalDate()
+                val mesNombre = fechaActual.month.getDisplayName(TextStyle.FULL, Locale("es", "ES"))
+                    .replaceFirstChar { it.uppercase() }
+                val textoFiltro = "$mesNombre ${fechaActual.year}"
 
-                        fechaGasto.month == fechaFiltroActual.month && fechaGasto.year == fechaFiltroActual.year
-                    }
+                val resultado = historyRepository.obtenerHistorial(
+                    mes = fechaActual.monthValue,
+                    anio = fechaActual.year
+                )
 
-                    val ahorrosFiltrados = listaAhorros.filter { ahorro ->
-                        val fechaAhorro = Instant.ofEpochMilli(ahorro.fechaLong)
-                            .atZone(ZoneId.systemDefault())
-                            .toLocalDate()
-
-                        fechaAhorro.month == fechaFiltroActual.month && fechaAhorro.year == fechaFiltroActual.year
-                    }
-
-                    val transacciones = gastosFiltrados.map { gasto ->
+                if (resultado.isSuccess) {
+                    val dto = resultado.getOrNull()!!
+                    val transacciones = dto.transacciones.map { t ->
                         GastoHistorial(
-                            id = gasto.id.toString(),
-                            descripcion = gasto.descripcion,
-                            monto = gasto.monto,
-                            categoriaId = gasto.categoriaId,
-                            categoria = gasto.categoriaNombre,
-                            fecha = Instant.ofEpochMilli(gasto.fechaLong)
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate()
-                                .toString(),
-                            colorCategoria = androidx.compose.ui.graphics.Color.Gray
+                            id = t.id,
+                            descripcion = t.descripcion,
+                            monto = t.monto,
+                            categoriaId = t.categoria,
+                            categoria = t.categoria,
+                            fecha = t.fecha,
+                            colorCategoria = try {
+                                Color(android.graphics.Color.parseColor(t.colorHex))
+                            } catch (e: Exception) {
+                                Color.Gray
+                            }
                         )
                     }
 
-                    val totalCalculado = gastosFiltrados.sumOf { it.monto }
-                    
-                    val totalAhorrado = ahorrosFiltrados.sumOf { 
-                        if (it.tipo == "INGRESO") it.monto else -it.monto 
-                    }
-                    
-                    val mesAnioTexto = fechaFiltroActual.format(formatterMeseAnio)
-
-                    HistoryData(
-                        mesAnioFiltro = mesAnioTexto.replaceFirstChar { it.uppercase() },
-                        totalGastadoMes = totalCalculado,
-                        totalAhorradoMes = totalAhorrado,
-                        transacciones = transacciones
+                    _uiState.value = HistoryUiState.Success(
+                        data = HistoryData(
+                            mesAnioFiltro = textoFiltro,
+                            totalGastadoMes = dto.totalGastadoMes,
+                            transacciones = transacciones
+                        )
                     )
-                }.collect { data ->
-                    _uiState.value = HistoryUiState.Success(data)
+                } else {
+                    _uiState.value = HistoryUiState.Error(resultado.exceptionOrNull()?.localizedMessage ?: "Error de conexión")
                 }
+
             } catch (e: Exception) {
-                _uiState.value = HistoryUiState.Error(e.message ?: "Error desconocido")
+                _uiState.value = HistoryUiState.Error("Error al conectar con el servidor: ${e.message}")
             }
         }
     }
