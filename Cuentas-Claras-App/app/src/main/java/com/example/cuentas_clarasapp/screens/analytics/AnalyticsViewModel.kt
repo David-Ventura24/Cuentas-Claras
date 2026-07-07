@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Locale
 
 class AnalyticsViewModel : ViewModel() {
+
+    private val repository = AnalyticsRepository()
 
     private val _uiState = MutableStateFlow<AnalyticsUiState>(AnalyticsUiState.Loading)
     val uiState: StateFlow<AnalyticsUiState> = _uiState.asStateFlow()
@@ -39,7 +39,6 @@ class AnalyticsViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = AnalyticsUiState.Loading
             try {
-                val repository = AnalyticsRepository()
                 val resultado = repository.obtenerAnaliticas()
 
                 if (resultado.isSuccess) {
@@ -53,6 +52,9 @@ class AnalyticsViewModel : ViewModel() {
                                 color = when(cat.categoria.lowercase()) {
                                     "alimentacion" -> androidx.compose.ui.graphics.Color(0xFFE54B4B)
                                     "transporte" -> androidx.compose.ui.graphics.Color(0xFF3A86FF)
+                                    "educacion" -> androidx.compose.ui.graphics.Color(0xFF2EC4B6)
+                                    "ocio" -> androidx.compose.ui.graphics.Color(0xFFF7A072)
+                                    "ahorro" -> androidx.compose.ui.graphics.Color(0xFF8338EC)
                                     else -> androidx.compose.ui.graphics.Color(0xFF985EFF)
                                 }
                             )
@@ -72,7 +74,7 @@ class AnalyticsViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
-                _uiState.value = AnalyticsUiState.Error("Error: ${e.message}")
+                _uiState.value = AnalyticsUiState.Error("Excepción: ${e.message}")
             }
         }
     }

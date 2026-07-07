@@ -209,31 +209,26 @@ app.get('/api/home', verificarToken, async (req, res) => {
             return res.status(200).json({ nombre_usuario: usuario?.nombre || "Usuario", cantidad_disponible: 0, gastos_hoy: [] });
         }
 
-        // 🌟 SOLUCIÓN AL ERROR: Si 'updated_at' es null, usamos 'created_at', y si ese también falla, usamos la fecha de hoy.
-        const fechaBase = presupuesto.updated_at || presupuesto.created_at || new Date().toISOString();
-        const fechaSoloDia = fechaBase.split('T')[0];
+        //  Usamos la FECHA Y HORA exacta del presupuesto para resetear el ciclo
+        const fechaReferencia = presupuesto.updated_at || presupuesto.created_at;
 
-        // Traemos los gastos del ciclo actual
         const { data: gastosCiclo } = await supabase.from('Gastos')
             .select('*')
             .eq('id_usuario', usuarioId)
-            .gte('fecha', fechaSoloDia);
+            .gte('fecha', fechaReferencia); 
 
         const totalGastadoCiclo = (gastosCiclo || []).reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
-        
-        // Calculamos el saldo real: Monto disponible inicial - Gastos del ciclo
-        const dineroInicialDisponible = parseFloat(presupuesto.cantidad_disponible || 0);
-        const saldoReal = dineroInicialDisponible - totalGastadoCiclo;
+        const montoInicial = parseFloat(presupuesto.cantidad_disponible || 0);
+        const balanceReal = montoInicial - totalGastadoCiclo;
 
-        // Gastos específicos de hoy
         const hoyISO = new Date().toISOString().split('T')[0];
         const gastosHoy = (gastosCiclo || []).filter(g => (g.fecha || "").startsWith(hoyISO));
 
         return res.status(200).json({
             error: null,
             nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: Math.max(0, saldoReal), 
-            monto_total_configurado: dineroInicialDisponible,
+            cantidad_disponible: Math.max(0, balanceReal), 
+            monto_total_configurado: montoInicial, 
             periodo: presupuesto.periodo || "Mensual",
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
@@ -242,7 +237,6 @@ app.get('/api/home', verificarToken, async (req, res) => {
             gastos_hoy: gastosHoy.map(g => ({ id: g.id, categoria: g.categoria, monto: g.total_gastado, fecha: g.fecha }))
         });
     } catch (error) {
-        console.error("❌ Error en /home:", error.message);
         return res.status(500).json({ error: error.message });
     }
 });
@@ -360,7 +354,10 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
         ]).select();
 
         if (error) return res.status(400).json({ error: error.message });
-        return res.status(201).json({ mensaje: "Gasto registrado" });
+        return res.status(201).json({ 
+            mensaje: "Gasto registrado",
+            error: null 
+        });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
@@ -390,28 +387,6 @@ app.get('/api/gastos/verificar-cupo', verificarToken, async (req, res) => {
     }
 });
 
-// OBTENER DATOS DE PERFIL DESDE LA DB ✨ AÑADIDO ✨
-app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
-    const usuarioId = req.usuario.id;
-    try {
-        const { data: usuario, error } = await supabase
-            .from('Usuario')
-            .select('nombre')
-            .eq('id', usuarioId)
-            .single();
-
-        if (error || !usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-
-        return res.status(200).json({
-            nombre: usuario.nombre,
-            carrera: usuario.carrera || "Informatics Engineering",
-            moneda: "USD ($)",
-            estadoCuenta: "Activa"
-        });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
-});
 
 // SOLICITAR RECUPERACIÓN DE CONTRASEÑA
 app.post('/api/auth/recuperar-password', async (req, res) => {

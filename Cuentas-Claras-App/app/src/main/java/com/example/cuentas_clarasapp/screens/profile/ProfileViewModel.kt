@@ -27,6 +27,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = ProfileUiState.Loading
             try {
                 val resultado = profileRepository.obtenerPerfil()
+                
                 if (resultado.isSuccess) {
                     val dto = resultado.getOrNull()
                     if (dto != null) {
@@ -36,12 +37,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                             moneda = dto.moneda,
                             estadoCuenta = dto.estadoCuenta
                         )
+                    } else {
+                        _uiState.value = ProfileUiState.Error("Respuesta vacía del servidor")
                     }
                 } else {
-                    _uiState.value = ProfileUiState.Error("Error al cargar perfil")
+                    val errorMsg = resultado.exceptionOrNull()?.message ?: "Error desconocido"
+                    _uiState.value = ProfileUiState.Error("Fallo de red: $errorMsg")
                 }
             } catch (e: Exception) {
-                _uiState.value = ProfileUiState.Error("No se pudieron cargar los datos: ${e.message}")
+                _uiState.value = ProfileUiState.Error("Excepción: ${e.message}")
             }
         }
     }

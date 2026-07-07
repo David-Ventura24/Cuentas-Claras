@@ -13,6 +13,6 @@ data class AnalyticsResponseDto(
 @Serializable
 data class CategoriaAnalyticsDto(
     val categoria: String,
-    val monto: Double,
+    @SerialName("total_gastado") val monto: Double, //  Sincronizado con el server.js
     val porcentaje: Float
 )

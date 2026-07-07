@@ -135,23 +135,26 @@ fun HomeScreen(
 
             val seExcedioLimiteDiario = gastoDiarioActual > limiteDiarioBase && limiteDiarioBase > 0.0
 
-            // Ahora la barra mide el Balance Disponible total (no el límite diario)
-            val porcentajeRestanteTotalFlotante = if (montoInicialConfigurado > 0.0) {
-                // Calculamos el porcentaje real basado en el Saldo Disponible total
-                val realP = (saldoDisponible / montoInicialConfigurado).coerceIn(0.0, 1.0)
+            // 🌟 La barra vuelve a medir el progreso de la JORNADA (Límite Diario)
+            val porcentajeJornadaFlotante = if (limiteDiarioBase > 0.0) {
+                // Calculamos el porcentaje real basado en lo disponible para gastar hoy
+                val realP = (disponibleParaGastarHoy / limiteDiarioBase).coerceIn(0.0, 1.0)
                 
                 // Aplicamos la optimización de bajar de 10 en 10%
                 ((floor(realP * 10.0) * 10.0) / 100.0).toFloat()
             } else 0f
 
-            // Basada puramente en el Balance Disponible
+            // Lógica de colores basada en la Jornada
             val colorDinamico = when {
-                porcentajeRestanteTotalFlotante > 0.5f -> GreenProgress
-                porcentajeRestanteTotalFlotante > 0.2f -> OrangeWarning
+                porcentajeJornadaFlotante > 0.5f -> GreenProgress
+                porcentajeJornadaFlotante > 0.2f -> OrangeWarning
                 else -> RedExpense
             }
 
-            val porcentajeRestanteGeneral = ((porcentajeRestanteTotalFlotante) * 100).toInt()
+            // Porcentaje para el encabezado (Balance Total)
+            val porcentajeRestanteGeneral = if (montoInicialConfigurado > 0.0) {
+                ((saldoDisponible / montoInicialConfigurado) * 100).toInt()
+            } else 0
 
             LazyColumn(
                 state = listState,
@@ -264,7 +267,7 @@ fun HomeScreen(
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
-                                text = "$porcentajeRestanteGeneral% disponible",
+                                text = "${((porcentajeJornadaFlotante) * 100).toInt()}% disponible",
                                 color = colorDinamico,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -272,7 +275,7 @@ fun HomeScreen(
                         }
 
                         LinearProgressIndicator(
-                            progress = { porcentajeRestanteTotalFlotante },
+                            progress = { porcentajeJornadaFlotante },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)

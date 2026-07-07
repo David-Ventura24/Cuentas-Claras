@@ -38,7 +38,7 @@ fun AnalyticsScreen(
     // Escucha reactiva del StateFlow bajo el ciclo de vida de la UI
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 🌟 Contenedor raíz limpio para evitar conflictos de layouts y permitir el scroll correcto
+    //  Contenedor raíz limpio para evitar conflictos de layouts y permitir el scroll correcto
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -179,7 +179,7 @@ private fun AnalyticsContent(
             }
         }
 
-        // 🌟 Espaciador inferior clave para que los últimos elementos queden totalmente visibles
+        //  Espaciador inferior clave para que los últimos elementos queden totalmente visibles
         // por encima de tu barra de pestañas flotante.
         Spacer(modifier = Modifier.height(110.dp))
     }

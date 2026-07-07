@@ -76,8 +76,9 @@ class HomeViewModel(
     ) {
         viewModelScope.launch {
             try {
+                // Usamos saldoDisponible como base para la suma (REGLA: Si es 0, suma a 0. Si hay algo, suma a algo)
                 val estadoActual = _uiState.value
-                val montoBase = if (estadoActual is HomeUiState.Success) estadoActual.data.montoInicialConfigurado else 0.0
+                val montoBase = if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
                 val nuevoMontoTotal = montoBase + montoAInyectar.toDouble()
 
                 val request = com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto(
@@ -90,13 +91,29 @@ class HomeViewModel(
                 val resultado = budgetRepository.guardarPresupuesto(request)
 
                 if (resultado.isSuccess) {
-                    cargarDatosFinancieros()
-                    onSuccess() //  Esto cerrará la pantalla
+                    // 🌟 LA CLAVE: Forzamos la recarga de datos y ESPERAMOS a que termine
+                    val refresh = homeRepository.obtenerDatosHome()
+                    if (refresh.isSuccess) {
+                        val dto = refresh.getOrNull()!!
+                        _uiState.value = HomeUiState.Success(HomeData(
+                            nombreUsuario = dto.nombre_usuario ?: "Usuario",
+                            saldoDisponible = dto.cantidad_disponible ?: 0.0,
+                            periodoPresupuesto = dto.periodo ?: "Sin configurar",
+                            porcentajeAhorro = dto.porcentaje_ahorro ?: 0,
+                            limiteDiarioSugerido = dto.limite_diario ?: 0.0,
+                            limiteDiarioInicial = dto.limite_diario ?: 0.0,
+                            montoInicialConfigurado = dto.monto_total_configurado ?: 0.0,
+                            gastoDiarioActual = dto.total_gastado_hoy ?: 0.0,
+                            gastosTotalesCiclo = dto.total_gastado_ciclo ?: 0.0,
+                            gastosDelDia = dto.gastos_hoy.map { g -> GastoItemHome(g.id.toString(), g.monto, g.categoria, "") }
+                        ))
+                        onSuccess() // 🌟 Ahora sí cerramos la pantalla, porque los datos ya están en la memoria
+                    }
                 } else {
-                    onError(resultado.exceptionOrNull()?.message ?: "Error al guardar")
+                    onError(resultado.exceptionOrNull()?.message ?: "Error")
                 }
             } catch (e: Exception) {
-                onError(e.message ?: "Error de conexión")
+                onError(e.message ?: "Error")
             }
         }
     }
