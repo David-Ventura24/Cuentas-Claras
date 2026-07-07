@@ -11,7 +11,7 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
 object ApiClient {
-    const val BASE_URL = "http://192.168.1.23:3000/api/"
+    const val BASE_URL = "https://cuentas-claras-production-a337.up.railway.app/api/"
 
     private var sessionManager: SessionManager? = null
 

@@ -8,6 +8,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+
 app.use(cors());
 app.use(express.json());
 
@@ -21,7 +22,7 @@ app.get('/', (req, res) => {
 const verificarToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     
-    // 🔍 LOG DE DETECTIVE
+    //  LOG DE DETECTIVE
     console.log("--- NUEVA PETICIÓN ---");
     console.log("Ruta:", req.path);
     console.log("Cabecera Authorization recibida:", authHeader);
@@ -108,7 +109,7 @@ app.post('/api/auth/login', async (req, res) => {
         const token = jwt.sign(
             { id: usuario.id, correo: usuario.correo_electronico },
             process.env.JWT_SECRET,
-            { expiresIn: '2d' }
+            { expiresIn: '365d' }
         );
 
         return res.status(200).json({
@@ -547,5 +548,5 @@ app.get('/api/analytics/gastos', verificarToken, async (req, res) => {
 
 
 app.listen(PORT, () => {
-    console.log(`Servidor escuchando en http://localhost:${PORT}`);
+    console.log(`Servidor activo y corriendo en el puerto ${PORT}`);
 });
