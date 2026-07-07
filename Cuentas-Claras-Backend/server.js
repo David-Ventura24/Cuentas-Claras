@@ -159,7 +159,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
                 cantidad_total: total,
                 ahorro: montoAhorro,
                 periodo: periodo,
-                // 🌟 AQUÍ LLENAMOS LAS COLUMNAS QUE SALEN NULL EN TU FOTO:
+                //  AQUÍ LLENAMOS LAS COLUMNAS QUE SALEN NULL EN TU FOTO:
                 cantidad_disponible: dineroDisponibleTotal,
                 dinero_disponible: dineroDisponibleTotal,
                 limite_diario: limiteDiarioCalculado,
@@ -212,10 +212,11 @@ app.get('/api/home', verificarToken, async (req, res) => {
         //  Usamos la FECHA Y HORA exacta del presupuesto para resetear el ciclo
         const fechaReferencia = presupuesto.updated_at || presupuesto.created_at;
 
-        const { data: gastosCiclo } = await supabase.from('Gastos')
-            .select('*')
-            .eq('id_usuario', usuarioId)
-            .gte('fecha', fechaReferencia); 
+        //Usamos la hora exacta con milisegundos para resetear de verdad 
+const { data: gastosCiclo } = await supabase.from('Gastos') 
+.select('*') 
+.eq('id_usuario', usuarioId) 
+.gt('fecha', fechaReferencia); 
 
         const totalGastadoCiclo = (gastosCiclo || []).reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
         const montoInicial = parseFloat(presupuesto.cantidad_disponible || 0);
@@ -241,7 +242,7 @@ app.get('/api/home', verificarToken, async (req, res) => {
     }
 });
 
-// PANTALLA DE HISTORIAL (FILTRADO DINÁMICO POR MES Y AÑO) ✨ AÑADIDO ✨
+// PANTALLA DE HISTORIAL (FILTRADO DINÁMICO POR MES Y AÑO) 
 app.get('/api/gastos/historial', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     // Android mandará por ejemplo: /api/gastos/historial?mes=5&anio=2026

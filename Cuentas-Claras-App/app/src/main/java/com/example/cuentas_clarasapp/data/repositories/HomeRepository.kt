@@ -20,8 +20,11 @@ class HomeRepository {
             }
 
             if (response.status == HttpStatusCode.OK) {
-                Result.success(response.body())
+                val body = response.body<HomeResponseDto>()
+                android.util.Log.d("HomeRepo", "CUERPO RECIBIDO: $body")
+                Result.success(body)
             } else {
+                android.util.Log.e("HomeRepo", "ERROR SERVER: ${response.status}")
                 Result.failure(Exception("Error al conectar con el servidor: ${response.status}"))
             }
         } catch (e: Exception) {

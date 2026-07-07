@@ -28,9 +28,11 @@ class HomeViewModel(
 
             try {
                 val resultado = homeRepository.obtenerDatosHome()
-                
+
                 if (resultado.isSuccess) {
                     val dto = resultado.getOrNull()!!
+                    android.util.Log.d("HomeVM", "DTO RECIBIDO: $dto")
+                    
                     if (dto.error == null) {
                         val infoHome = HomeData(
                             nombreUsuario = dto.nombre_usuario ?: "Usuario",
@@ -39,7 +41,6 @@ class HomeViewModel(
                             porcentajeAhorro = dto.porcentaje_ahorro ?: 0,
                             limiteDiarioSugerido = dto.limite_diario ?: 0.0,
                             limiteDiarioInicial = dto.limite_diario ?: 0.0,
-                            //  Para que la barra sepa el total real
                             montoInicialConfigurado = dto.monto_total_configurado ?: 0.0,
                             gastoDiarioActual = dto.total_gastado_hoy ?: 0.0,
                             gastosTotalesCiclo = dto.total_gastado_ciclo ?: 0.0,
@@ -53,16 +54,21 @@ class HomeViewModel(
                                 )
                             }
                         )
+                        android.util.Log.d("HomeVM", "ESTADO SUCCESS: $infoHome")
                         _uiState.value = HomeUiState.Success(infoHome)
                     } else {
+                        android.util.Log.e("HomeVM", "ERROR EN DTO: ${dto.error}")
                         _uiState.value = HomeUiState.Error(dto.error)
                     }
                 } else {
-                    _uiState.value = HomeUiState.Error(resultado.exceptionOrNull()?.localizedMessage ?: "Error desconocido")
+                    val errorMsg = resultado.exceptionOrNull()?.localizedMessage ?: "Error desconocido"
+                    android.util.Log.e("HomeVM", "FALLO REPOSITORIO: $errorMsg")
+                    _uiState.value = HomeUiState.Error(errorMsg)
                 }
 
             } catch (excepcion: Exception) {
-                _uiState.value = HomeUiState.Error(excepcion.localizedMessage ?: "Error de red inesperado")
+                _uiState.value =
+                    HomeUiState.Error(excepcion.localizedMessage ?: "Error de red inesperado")
             }
         }
     }
@@ -78,7 +84,8 @@ class HomeViewModel(
             try {
                 // Usamos saldoDisponible como base para la suma (REGLA: Si es 0, suma a 0. Si hay algo, suma a algo)
                 val estadoActual = _uiState.value
-                val montoBase = if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
+                val montoBase =
+                    if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
                 val nuevoMontoTotal = montoBase + montoAInyectar.toDouble()
 
                 val request = com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto(
@@ -87,33 +94,43 @@ class HomeViewModel(
                     porcentajeAhorro = Math.round(nuevoPorcentajeAhorro).toDouble()
                 )
 
-                val budgetRepository = com.example.cuentas_clarasapp.data.repositories.BudgetApiRepository()
+                val budgetRepository =
+                    com.example.cuentas_clarasapp.data.repositories.BudgetApiRepository()
                 val resultado = budgetRepository.guardarPresupuesto(request)
 
                 if (resultado.isSuccess) {
-                    // 🌟 LA CLAVE: Forzamos la recarga de datos y ESPERAMOS a que termine
+                    //  LA CLAVE: Forzamos la recarga de datos y ESPERAMOS a que termine de verdad
                     val refresh = homeRepository.obtenerDatosHome()
                     if (refresh.isSuccess) {
                         val dto = refresh.getOrNull()!!
-                        _uiState.value = HomeUiState.Success(HomeData(
-                            nombreUsuario = dto.nombre_usuario ?: "Usuario",
-                            saldoDisponible = dto.cantidad_disponible ?: 0.0,
-                            periodoPresupuesto = dto.periodo ?: "Sin configurar",
-                            porcentajeAhorro = dto.porcentaje_ahorro ?: 0,
-                            limiteDiarioSugerido = dto.limite_diario ?: 0.0,
-                            limiteDiarioInicial = dto.limite_diario ?: 0.0,
-                            montoInicialConfigurado = dto.monto_total_configurado ?: 0.0,
-                            gastoDiarioActual = dto.total_gastado_hoy ?: 0.0,
-                            gastosTotalesCiclo = dto.total_gastado_ciclo ?: 0.0,
-                            gastosDelDia = dto.gastos_hoy.map { g -> GastoItemHome(g.id.toString(), g.monto, g.categoria, "") }
-                        ))
-                        onSuccess() // 🌟 Ahora sí cerramos la pantalla, porque los datos ya están en la memoria
+                        // Actualizamos el estado interno inmediatamente
+                        _uiState.value = HomeUiState.Success(
+                            HomeData(
+                                nombreUsuario = dto.nombre_usuario ?: "Usuario",
+                                saldoDisponible = dto.cantidad_disponible ?: 0.0,
+                                periodoPresupuesto = dto.periodo ?: "Sin configurar",
+                                porcentajeAhorro = dto.porcentaje_ahorro ?: 0,
+                                limiteDiarioSugerido = dto.limite_diario ?: 0.0,
+                                limiteDiarioInicial = dto.limite_diario ?: 0.0,
+                                montoInicialConfigurado = dto.monto_total_configurado ?: 0.0,
+                                gastoDiarioActual = dto.total_gastado_hoy ?: 0.0,
+                                gastosTotalesCiclo = dto.total_gastado_ciclo ?: 0.0,
+                                gastosDelDia = dto.gastos_hoy.map { g ->
+                                    GastoItemHome(
+                                        g.id.toString(),
+                                        g.monto,
+                                        g.categoria,
+                                        ""
+                                    )
+                                }
+                            ))
+                        onSuccess() //  Ahora sí cerramos la pantalla, porque los datos ya están en la memoria
                     }
                 } else {
-                    onError(resultado.exceptionOrNull()?.message ?: "Error")
+                    onError(resultado.exceptionOrNull()?.message ?: "Error al guardar")
                 }
             } catch (e: Exception) {
-                onError(e.message ?: "Error")
+                onError(e.message ?: "Error de red")
             }
         }
     }
