@@ -22,7 +22,6 @@ class HomeViewModel(
     }
 
     fun cargarDatosFinancieros() {
-        android.util.Log.d("HomeVM", "Refrescando datos financieros...")
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
 
@@ -84,9 +83,16 @@ class HomeViewModel(
             try {
                 // Usamos saldoDisponible como base para la suma (REGLA: Si es 0, suma a 0. Si hay algo, suma a algo)
                 val estadoActual = _uiState.value
-                val montoBase =
-                    if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
-                val nuevoMontoTotal = montoBase + montoAInyectar.toDouble()
+                val saldoActual = if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
+
+                val nuevoMontoTotal = if (saldoActual <= 0) {
+                    // Si llegaste a 0, empezamos de cero con lo nuevo
+                    montoAInyectar.toDouble()
+                } else {
+                    // Si aún tienes dinero, sumamos el BRUTO anterior para no cobrar ahorro dos veces
+                    val brutoAnterior = (estadoActual as HomeUiState.Success).data.montoInicialConfigurado
+                    brutoAnterior + montoAInyectar.toDouble()
+                }
 
                 val request = com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto(
                     cantidadTotal = nuevoMontoTotal,
@@ -99,7 +105,6 @@ class HomeViewModel(
                 val resultado = budgetRepository.guardarPresupuesto(request)
 
                 if (resultado.isSuccess) {
-                    //  LA CLAVE: Forzamos la recarga de datos y ESPERAMOS a que termine de verdad
                     val refresh = homeRepository.obtenerDatosHome()
                     if (refresh.isSuccess) {
                         val dto = refresh.getOrNull()!!

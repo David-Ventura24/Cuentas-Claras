@@ -209,27 +209,36 @@ app.get('/api/home', verificarToken, async (req, res) => {
             return res.status(200).json({ nombre_usuario: usuario?.nombre || "Usuario", cantidad_disponible: 0, gastos_hoy: [] });
         }
 
-        //  Usamos la FECHA Y HORA exacta del presupuesto para resetear el ciclo
-        const fechaReferencia = presupuesto.updated_at || presupuesto.created_at;
+        // 🌟 CORRECCIÓN RADICAL: Forzamos la comparación a milisegundos para que no haya error
+        const fechaReferencia = new Date(presupuesto.updated_at || presupuesto.created_at).getTime();
 
-        //Usamos la hora exacta con milisegundos para resetear de verdad 
-const { data: gastosCiclo } = await supabase.from('Gastos') 
-.select('*') 
-.eq('id_usuario', usuarioId) 
-.gt('fecha', fechaReferencia); 
+        const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
+        
+        // Filtramos manualmente en el servidor para que sea 100% exacto
+        const gastosCiclo = (todosLosGastos || []).filter(g => {
+            const fechaGasto = new Date(g.fecha).getTime();
+            return fechaGasto >= fechaReferencia; // Solo gastos DESPUÉS del presupuesto
+        });
 
-        const totalGastadoCiclo = (gastosCiclo || []).reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
-        const montoInicial = parseFloat(presupuesto.cantidad_disponible || 0);
-        const balanceReal = montoInicial - totalGastadoCiclo;
+        const totalGastadoCiclo = gastosCiclo.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
+        const montoBase = parseFloat(presupuesto.cantidad_disponible || 0);
+        const saldoReal = montoBase - totalGastadoCiclo;
+
+        // LOG PARA TI: Mira esto en la terminal de Visual Studio
+        console.log(`--- CÁLCULO DE BALANCE ---`);
+        console.log(`Monto Inicial: ${montoBase}`);
+        console.log(`Gastos encontrados después del presupuesto: ${gastosCiclo.length}`);
+        console.log(`Total Restado: ${totalGastadoCiclo}`);
+        console.log(`Resultado Final: ${saldoReal}`);
 
         const hoyISO = new Date().toISOString().split('T')[0];
-        const gastosHoy = (gastosCiclo || []).filter(g => (g.fecha || "").startsWith(hoyISO));
+        const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
 
         return res.status(200).json({
             error: null,
             nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: Math.max(0, balanceReal), 
-            monto_total_configurado: montoInicial, 
+            cantidad_disponible: Math.max(0, saldoReal), 
+            monto_total_configurado: montoBase, 
             periodo: presupuesto.periodo || "Mensual",
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
@@ -496,14 +505,29 @@ app.post('/api/auth/restablecer-password', async (req, res) => {
 // OBTENER PERFIL DEL USUARIO
 app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
-    const { data: usuario, error } = await supabase.from('Usuario').select('nombre, carrera').eq('id', usuarioId).single();
-    if (error) return res.status(400).json({ error: error.message });
-    res.json({
-        nombre: usuario.nombre,
-        carrera: usuario.carrera || "Estudiante", // Asegúrate de tener la columna 'carrera' en Supabase
-        moneda: "USD ($)",
-        estado: "Activa"
-    });
+    console.log("--- 👤 PIDIENDO PERFIL ---");
+    console.log("ID del Usuario:", usuarioId);
+
+    try {
+        // Intentamos pedir los datos
+        const { data: usuario, error } = await supabase
+            .from('Usuario')
+            .select('nombre, carrera') 
+            .eq('id', usuarioId)
+            .maybeSingle();
+
+        
+        return res.status(200).json({
+            nombre: usuario.nombre,
+            carrera: usuario.carrera || "Carrera no definida",
+            moneda: "USD ($)",
+            estadoCuenta: "Activa"
+        });
+
+    } catch (error) {
+        console.log("🚨 Fallo crítico en Perfil:", error.message);
+        return res.status(500).json({ error: error.message });
+    }
 });
 
 // OBTENER DATOS DE AHORRO ACUMULADO
