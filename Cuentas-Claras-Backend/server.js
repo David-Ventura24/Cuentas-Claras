@@ -250,7 +250,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
 // PRESUPUESTO
 // ─────────────────────────────────────────
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
-    console.log("--- 📥 PROCESANDO PRESUPUESTO ---");
+    console.log("---  PROCESANDO PRESUPUESTO ---");
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
 
@@ -296,7 +296,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// HOME
+// HOME  
 // ─────────────────────────────────────────
 app.get('/api/home', verificarToken, async (req, res) => {
     try {
@@ -319,21 +319,30 @@ app.get('/api/home', verificarToken, async (req, res) => {
             });
         }
 
+        // Usar la fecha del presupuesto actual como inicio del ciclo de gastos
         const fechaReferencia = new Date(presupuesto.updated_at || presupuesto.created_at).getTime();
         const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
 
+        // Filtrar los gastos que pertenecen únicamente a este ciclo activo
         const gastosCiclo = (todosLosGastos || []).filter(g => {
             return new Date(g.fecha).getTime() >= fechaReferencia;
         });
 
         const totalGastadoCiclo = gastosCiclo.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
-        const montoBase = parseFloat(presupuesto.cantidad_disponible || 0);
-        const saldoReal = montoBase - totalGastadoCiclo;
+        
+        // CORRECCIÓN: El monto inicial configurado por el usuario es cantidad_total
+        const montoTotalBruto = parseFloat(presupuesto.cantidad_total || 0);
+        // El dinero inicial destinado a gastar (ya sin el ahorro meta extraído)
+        const montoBaseDisponible = parseFloat(presupuesto.monto_inicial_real || bruto - parseFloat(presupuesto.ahorro || 0));
+        
+        // El saldo real disponible en este instante es el dinero disponible inicial menos los gastos efectuados
+        const saldoReal = montoBaseDisponible - totalGastadoCiclo;
 
-        console.log(`--- CÁLCULO DE BALANCE ---`);
-        console.log(`Monto Inicial: ${montoBase}`);
-        console.log(`Gastos del ciclo: ${gastosCiclo.length} | Total: ${totalGastadoCiclo}`);
-        console.log(`Saldo Final: ${saldoReal}`);
+        console.log(`--- CÁLCULO DE BALANCE CORREGIDO ---`);
+        console.log(`Monto Bruto Total: ${montoTotalBruto}`);
+        console.log(`Monto Base Disponible para Gastos: ${montoBaseDisponible}`);
+        console.log(`Gastos del ciclo actual: Total: ${totalGastadoCiclo}`);
+        console.log(`Saldo Real Disponible: ${saldoReal}`);
 
         const hoyISO = new Date().toISOString().split('T')[0];
         const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
@@ -341,8 +350,8 @@ app.get('/api/home', verificarToken, async (req, res) => {
         return res.status(200).json({
             error: null,
             nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: Math.max(0, saldoReal),
-            monto_total_configurado: montoBase,
+            cantidad_disponible: Math.max(0, saldoReal), // Saldo Neto que queda disponible
+            monto_total_configurado: montoTotalBruto,    // Envía el monto real bruto ingresado ($100.00)
             periodo: presupuesto.periodo || "Mensual",
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
