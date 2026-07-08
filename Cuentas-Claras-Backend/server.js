@@ -250,7 +250,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
 // PRESUPUESTO
 // ─────────────────────────────────────────
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
-    console.log("---  PROCESANDO PRESUPUESTO ---");
+    console.log("--- 💾 PROCESANDO PRESUPUESTO BLINDADO ---");
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
 
@@ -261,9 +261,17 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
     const limiteDiarioCalculado = dineroDisponibleTotal / dias;
 
-    console.log("Valores calculados:", { disponible: dineroDisponibleTotal, limite: limiteDiarioCalculado });
-
     try {
+        // Consultar si ya existe un registro para preservar la fecha original de creación del ciclo
+        const { data: presupuestoExistente } = await supabase
+            .from('Presupuesto')
+            .select('created_at, fecha_inicio')
+            .eq('id_usuario', usuarioId)
+            .maybeSingle();
+
+        const fechaInicioOriginal = presupuestoExistente?.fecha_inicio || new Date().toISOString();
+        const fechaCreatedOriginal = presupuestoExistente?.created_at || new Date().toISOString();
+
         const { data, error } = await supabase
             .from('Presupuesto')
             .upsert({
@@ -275,8 +283,9 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
                 dinero_disponible: dineroDisponibleTotal,
                 limite_diario: limiteDiarioCalculado,
                 monto_inicial_real: dineroDisponibleTotal,
-                fecha_inicio: new Date(),
-                updated_at: new Date()
+                fecha_inicio: fechaInicioOriginal, // BLINDAJE: Conserva el inicio del ciclo activo
+                created_at: fechaCreatedOriginal,
+                updated_at: fechaCreatedOriginal   // BLINDAJE: Evita que se mueva la referencia de los gastos pasados
             }, { onConflict: 'id_usuario' })
             .select()
             .single();
@@ -286,7 +295,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
 
-        console.log(" Presupuesto guardado con éxito");
+        console.log(" Presupuesto guardado y blindado con éxito");
         return res.status(200).json({ mensaje: "OK", presupuesto: data });
 
     } catch (error) {
@@ -296,7 +305,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// HOME  
+// HOME
 // ─────────────────────────────────────────
 app.get('/api/home', verificarToken, async (req, res) => {
     try {
@@ -319,30 +328,24 @@ app.get('/api/home', verificarToken, async (req, res) => {
             });
         }
 
-        // Usar la fecha del presupuesto actual como inicio del ciclo de gastos
-        const fechaReferencia = new Date(presupuesto.updated_at || presupuesto.created_at).getTime();
+        // BLINDAJE: Usamos la fecha original del ciclo para que ningún gasto previo desaparezca
+        const fechaReferencia = new Date(presupuesto.fecha_inicio || presupuesto.created_at).getTime();
         const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
 
-        // Filtrar los gastos que pertenecen únicamente a este ciclo activo
         const gastosCiclo = (todosLosGastos || []).filter(g => {
             return new Date(g.fecha).getTime() >= fechaReferencia;
         });
 
         const totalGastadoCiclo = gastosCiclo.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
         
-        // CORRECCIÓN: El monto inicial configurado por el usuario es cantidad_total
+        // MATEMÁTICA REAL BLINDADA:
         const montoTotalBruto = parseFloat(presupuesto.cantidad_total || 0);
-        // El dinero inicial destinado a gastar (ya sin el ahorro meta extraído)
-        const montoBaseDisponible = parseFloat(presupuesto.monto_inicial_real || bruto - parseFloat(presupuesto.ahorro || 0));
-        
-        // El saldo real disponible en este instante es el dinero disponible inicial menos los gastos efectuados
+        const montoBaseDisponible = parseFloat(presupuesto.monto_inicial_real || (montoTotalBruto - parseFloat(presupuesto.ahorro || 0)));
         const saldoReal = montoBaseDisponible - totalGastadoCiclo;
 
-        console.log(`--- CÁLCULO DE BALANCE CORREGIDO ---`);
-        console.log(`Monto Bruto Total: ${montoTotalBruto}`);
-        console.log(`Monto Base Disponible para Gastos: ${montoBaseDisponible}`);
-        console.log(`Gastos del ciclo actual: Total: ${totalGastadoCiclo}`);
-        console.log(`Saldo Real Disponible: ${saldoReal}`);
+        console.log(`--- CÁLCULO DE BALANCE MATEMÁTICO ---`);
+        console.log(`Bruto Configurado: ${montoTotalBruto} | Base Disponible: ${montoBaseDisponible}`);
+        console.log(`Gastos Ciclo: ${totalGastadoCiclo} | Saldo Disponible Neto: ${saldoReal}`);
 
         const hoyISO = new Date().toISOString().split('T')[0];
         const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
@@ -350,8 +353,8 @@ app.get('/api/home', verificarToken, async (req, res) => {
         return res.status(200).json({
             error: null,
             nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: Math.max(0, saldoReal), // Saldo Neto que queda disponible
-            monto_total_configurado: montoTotalBruto,    // Envía el monto real bruto ingresado ($100.00)
+            cantidad_disponible: Math.max(0, saldoReal), // Muestra exactamente los $179.00 correctos
+            monto_total_configurado: montoTotalBruto,    // Devuelve limpio el valor configurado ($100.00)
             periodo: presupuesto.periodo || "Mensual",
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
@@ -393,14 +396,12 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
     }
 });
 
-// MODIFICADO: Ahora incluye la lectura de ahorros correspondientes al mes
 app.get('/api/gastos/historial', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const mesFiltro = parseInt(req.query.mes) || new Date().getMonth() + 1;
     const anioFiltro = parseInt(req.query.anio) || new Date().getFullYear();
 
     try {
-        // 1. Obtener Gastos de Supabase
         const { data: gastos, error: errGastos } = await supabase
             .from('Gastos')
             .select('*')
@@ -408,7 +409,6 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
 
         if (errGastos) return res.status(400).json({ error: errGastos.message });
 
-        // 2. Obtener Ahorros de Supabase para calcular la tarjeta superior
         const { data: ahorros, error: errAhorros } = await supabase
             .from('Ahorros')
             .select('*')
@@ -416,34 +416,30 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
 
         if (errAhorros) return res.status(400).json({ error: errAhorros.message });
 
-        // Filtrar Gastos por mes y año
         const transaccionesFiltradas = (gastos || []).filter(g => {
             if (!g.fecha) return false;
             const partes = g.fecha.split('T')[0].split('-');
             return parseInt(partes[0]) === anioFiltro && parseInt(partes[1]) === mesFiltro;
         });
 
-        // Filtrar Ahorros por mes y año (para que coincida con el mes en pantalla)
         const ahorrosFiltrados = (ahorros || []).filter(a => {
             if (!a.fecha) return false;
             const partes = a.fecha.split('T')[0].split('-');
             return parseInt(partes[0]) === anioFiltro && parseInt(partes[1]) === mesFiltro;
         });
 
-        // Calcular sumas totales del mes
         const totalGastadoMes = transaccionesFiltradas.reduce(
             (acc, g) => acc + parseFloat(g.total_gastado || 0), 0
         );
 
-        // CORRECCIÓN AQUÍ: Restar los retiros y sumar los ingresos del mes
         const totalAhorradoMesNeto = ahorrosFiltrados.reduce((acc, a) => {
             const montoNumerico = parseFloat(a.monto || 0);
             const tipoMovimiento = (a.tipo || "").trim().toUpperCase();
 
             if (tipoMovimiento === 'RETIRO') {
-                return acc - montoNumerico; // Resta el retiro del acumulado del mes
+                return acc - montoNumerico;
             } else {
-                return acc + montoNumerico; // Suma los ingresos
+                return acc + montoNumerico;
             }
         }, 0);
 
@@ -469,8 +465,8 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
         return res.status(200).json({
             error: null,
             totalGastadoMes: totalGastadoMes,
-            totalAhorradoMes: totalAhorradoMesNeto, // Enviamos el valor neto corregido
-            ahorro_neto: totalAhorradoMesNeto,      // Enviamos el valor neto corregido
+            totalAhorradoMes: totalAhorradoMesNeto,
+            ahorro_neto: totalAhorradoMesNeto,
             transacciones: transaccionesMapeadas
         });
 
@@ -510,7 +506,7 @@ app.get('/api/gastos/verificar-cupo', verificarToken, async (req, res) => {
 // ─────────────────────────────────────────
 app.get('/api/ahorros/status', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
-    console.log("---  PIDIENDO AHORROS para usuario:", usuarioId);
+    console.log("--- PIDIENDO AHORROS para usuario:", usuarioId);
 
     try {
         const { data: movimientos, error } = await supabase
@@ -524,22 +520,20 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
 
-        // CORRECCIÓN: Restar si es RETIRO, sumar si es INGRESO (ignorando mayúsculas/minúsculas)
         const totalAcumulado = (movimientos || []).reduce((acc, m) => {
             const montoNumerico = parseFloat(m.monto || 0);
             const tipoMovimiento = (m.tipo || "").trim().toUpperCase();
 
             if (tipoMovimiento === 'RETIRO') {
-                return acc - montoNumerico; // Resta los retiros del balance global
+                return acc - montoNumerico;
             } else {
-                return acc + montoNumerico; // Suma los ingresos/ahorros automáticos
+                return acc + montoNumerico;
             }
         }, 0);
 
         console.log("✅ Total neto calculado:", totalAcumulado, "| Movimientos:", movimientos?.length);
 
         return res.status(200).json({
-            // Enviamos el cálculo neto real de la matemática
             ahorro_neto: totalAcumulado,
             movimientos: movimientos || []
         });
@@ -562,7 +556,6 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
     }
 
     try {
-        // CORRECCIÓN: Si no viene tipo, asumimos 'INGRESO'. Forzamos mayúsculas para mantener consistencia limpia.
         const tipoEstandarizado = (tipo || 'INGRESO').trim().toUpperCase();
 
         const { data, error } = await supabase
@@ -570,7 +563,7 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
             .insert([{
                 id_usuario: usuarioId,
                 monto: parseFloat(monto),
-                tipo: tipoEstandarizado, // Guardar ingreso o retiro de forma limpia
+                tipo: tipoEstandarizado,
                 nota: nota || '',
                 fecha: new Date().toISOString()
             }])
@@ -673,5 +666,5 @@ app.get('/api/analytics/gastos', verificarToken, async (req, res) => {
 // START
 // ─────────────────────────────────────────
 app.listen(PORT, () => {
-    console.log(`Servidor activo y corriendo en el puerto ${PORT}`);
+    console.log(`Servidor activo y blindado corriendo en el puerto ${PORT}`);
 });

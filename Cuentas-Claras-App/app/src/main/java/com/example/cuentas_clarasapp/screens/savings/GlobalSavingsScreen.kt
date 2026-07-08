@@ -236,7 +236,7 @@ private fun MovimientoAhorroRow(movimiento: AhorroEntity) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = fechaFormateada, color = TextDim, fontSize = 12.sp)
         }
-
+ 
         Text(
             text = "$prefijo${"%.2f".format(movimiento.monto)}",
             color = colorMonto,
