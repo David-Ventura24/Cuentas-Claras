@@ -158,22 +158,25 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
         let montoInyectado = totalRecibido;
         let ahorroExistente = 0;
         let disponibleExistente = 0;
+        let cantidadTotalExistente = 0;
         let fechaActualizacion = new Date();
 
         if (ex) {
             disponibleExistente = parseFloat(ex.dinero_disponible || 0);
-            
-        
+
             if (disponibleExistente <= 0) {
                 // Si el balance llegó a 0, ignoramos el total anterior y empezamos de cero
                 montoInyectado = totalRecibido;
                 ahorroExistente = 0;
                 disponibleExistente = 0;
+                cantidadTotalExistente = 0;
                 fechaActualizacion = new Date();
             } else {
-                // Si aún queda dinero, restamos para saber cuánto se inyectó de más
-                montoInyectado = totalRecibido - parseFloat(ex.cantidad_total || 0);
+                // Si aún queda dinero, el nuevo monto se SUMA al existente
+                // (totalRecibido es el monto que el usuario está agregando, no el nuevo total acumulado)
+                montoInyectado = totalRecibido;
                 ahorroExistente = parseFloat(ex.ahorro || 0);
+                cantidadTotalExistente = parseFloat(ex.cantidad_total || 0);
                 fechaActualizacion = ex.updated_at;
             }
         }
@@ -184,6 +187,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
 
         const nuevoAhorroTotal = ahorroExistente + ahorroDeLaInyeccion;
         const nuevoDisponibleTotal = disponibleExistente + disponibleDeLaInyeccion;
+        const nuevaCantidadTotal = cantidadTotalExistente + montoInyectado;
         
         const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
 
@@ -192,7 +196,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
             .from('Presupuesto')
             .upsert({
                 id_usuario: usuarioId,
-                cantidad_total: (disponibleExistente <= 0) ? totalRecibido : totalRecibido, 
+                cantidad_total: nuevaCantidadTotal, 
                 ahorro: nuevoAhorroTotal,      
                 periodo: periodo,
                 cantidad_disponible: nuevoDisponibleTotal,

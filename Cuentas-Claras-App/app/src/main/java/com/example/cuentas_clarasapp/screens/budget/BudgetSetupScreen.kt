@@ -226,7 +226,9 @@ fun BudgetScreen(
                                                 onSuccess = {
                                                     isSaving = false
                                                     montoInput = ""
-                                                    navController.popBackStack() //  Solo volvemos si el server dijo OK
+                                                    // 🌟 SOLUCIÓN: Eliminamos navController.popBackStack()
+                                                    // Cuando el presupuesto es desde 0, la pantalla se queda 
+                                                    // en el mismo sitio y se actualiza sola al modo detalle.
                                                 },
                                                 onError = { error ->
                                                     scope.launch {

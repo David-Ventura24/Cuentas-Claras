@@ -109,7 +109,8 @@ class HomeViewModel(
                     onError(resultado.exceptionOrNull()?.message ?: "Error")
                 }
             } catch (e: Exception) {
-                onError(e.message ?: "Error")
+                // 🌟 CORRECCIÓN: Solo mostramos el error, no sacamos al usuario
+                onError(e.message ?: "Error de red")
             }
         }
     }
