@@ -18,14 +18,15 @@ const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // true para puerto 465, false para otros puertos
+    port: 587,        // Cambiar 465 por 587
+    secure: false,    // Debe ser false para el puerto 587 (usa TLS en su lugar)
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
     tls: {
-        // Esto evita errores si el servidor de Railway tiene problemas con certificados
+        // Obliga a requerir TLS de forma segura y evita problemas de handshake en Railway
+        requireTLS: true,
         rejectUnauthorized: false 
     }
 });
