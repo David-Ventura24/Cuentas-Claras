@@ -30,6 +30,13 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+try {
+  const info = await transporter.sendMail(mailOptions);
+  console.log("✅ Correo enviado con éxito:", info.messageId);
+} catch (error) {
+  console.error("❌ Error completo en Nodemailer:", error);
+}
+
 app.get('/', (req, res) => {
     res.send('Backend de CuentasClarasApp activo');
 });
