@@ -261,7 +261,14 @@ fun BudgetScreen(
                                 ) {
                                     Text("RESUMEN GENERAL DEL CICLO", color = Purple, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp)
 
-                                    StatusRow(label = "Presupuesto Total Ingresado", value = "$${String.format(Locale.getDefault(), "%.2f", datosActuales.montoInicialConfigurado)}")
+                                    // 🌟 CÁLCULO BRUTO: Revertimos el ahorro para mostrar el total original (ej. 200)
+                                    val montoBrutoReal = if (datosActuales.porcentajeAhorro < 100) {
+                                        datosActuales.montoInicialConfigurado / (1 - (datosActuales.porcentajeAhorro / 100.0))
+                                    } else {
+                                        datosActuales.montoInicialConfigurado
+                                    }
+
+                                    StatusRow(label = "Presupuesto Total Ingresado", value = "$${String.format(Locale.getDefault(), "%.2f", montoBrutoReal)}")
                                     StatusRow(label = "Saldo Disponible", value = "$${String.format(Locale.getDefault(), "%.2f", datosActuales.saldoDisponible)}", showDivider = true)
                                     StatusRow(label = "Periodo del Ciclo", value = datosActuales.periodoPresupuesto, showDivider = true)
                                     StatusRow(label = "Porcentaje Ahorro Meta", value = "${datosActuales.porcentajeAhorro}%", showDivider = true)

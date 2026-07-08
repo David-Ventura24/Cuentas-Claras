@@ -148,12 +148,10 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
     
-    // totalRecibido es el acumulado que manda la App (ej: 400)
     const totalRecibido = parseFloat(cantidad_total);
     const pctNuevo = parseFloat(porcentaje_ahorro || 0);
 
     try {
-        // 1. Buscamos qué teníamos antes
         const { data: ex } = await supabase.from('Presupuesto')
             .select('*').eq('id_usuario', usuarioId).maybeSingle();
 
@@ -163,13 +161,21 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
         let fechaActualizacion = new Date();
 
         if (ex) {
-            // Calculamos cuánto dinero REAL se está inyectando ahora
-            montoInyectado = totalRecibido - parseFloat(ex.cantidad_total);
-            ahorroExistente = parseFloat(ex.ahorro || 0);
             disponibleExistente = parseFloat(ex.dinero_disponible || 0);
             
-            //  Si el balance era 0 o negativo, reset de fecha. Si no, mantenemos.
-            fechaActualizacion = disponibleExistente <= 0 ? new Date() : ex.updated_at;
+        
+            if (disponibleExistente <= 0) {
+                // Si el balance llegó a 0, ignoramos el total anterior y empezamos de cero
+                montoInyectado = totalRecibido;
+                ahorroExistente = 0;
+                disponibleExistente = 0;
+                fechaActualizacion = new Date();
+            } else {
+                // Si aún queda dinero, restamos para saber cuánto se inyectó de más
+                montoInyectado = totalRecibido - parseFloat(ex.cantidad_total || 0);
+                ahorroExistente = parseFloat(ex.ahorro || 0);
+                fechaActualizacion = ex.updated_at;
+            }
         }
 
         // 2. Cálculo Incremental
@@ -186,8 +192,8 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
             .from('Presupuesto')
             .upsert({
                 id_usuario: usuarioId,
-                cantidad_total: totalRecibido, // Bruto histórico 
-                ahorro: nuevoAhorroTotal,      // Ahorro real sumado
+                cantidad_total: (disponibleExistente <= 0) ? totalRecibido : totalRecibido, 
+                ahorro: nuevoAhorroTotal,      
                 periodo: periodo,
                 cantidad_disponible: nuevoDisponibleTotal,
                 dinero_disponible: nuevoDisponibleTotal,
@@ -199,16 +205,16 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
 
         if (error) throw error;
 
-        // 4. Registrar en la tabla de Ahorros el monto real inyectado
-        if (diferenciaAhorro > 0) {
-    await supabase.from('Ahorros').insert([{
-        id_usuario: usuarioId,
-        monto: diferenciaAhorro,
-        tipo: 'INGRESO',
-        nota: `Ahorro automático por inyección`,
-        fecha: new Date().toISOString() 
-    }]);
-}
+        //  Usamos ahorroDeLaInyeccion
+        if (ahorroDeLaInyeccion > 0) {
+            await supabase.from('Ahorros').insert([{
+                id_usuario: usuarioId,
+                monto: ahorroDeLaInyeccion,
+                tipo: 'INGRESO',
+                nota: `Ahorro automático por inyección`,
+                fecha: new Date().toISOString() 
+            }]);
+        }
 
         res.json({ mensaje: "OK", presupuesto });
     } catch (error) { res.status(400).json({ error: error.message }); }
