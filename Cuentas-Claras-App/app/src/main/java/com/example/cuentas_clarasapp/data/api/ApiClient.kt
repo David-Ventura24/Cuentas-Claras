@@ -32,9 +32,9 @@ object ApiClient {
             }
 
             install(HttpTimeout) {
-                requestTimeoutMillis = 15000 // 15 segundos
-                connectTimeoutMillis = 15000
-                socketTimeoutMillis = 15000
+                requestTimeoutMillis = 60000 // 15 segundos
+                connectTimeoutMillis = 60000
+                socketTimeoutMillis = 60000
             }
 
             install(DefaultRequest) {
