@@ -30,12 +30,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-try {
-  const info = await transporter.sendMail(mailOptions);
-  console.log("✅ Correo enviado con éxito:", info.messageId);
-} catch (error) {
-  console.error("❌ Error completo en Nodemailer:", error);
-}
+
 
 app.get('/', (req, res) => {
     res.send('Backend de CuentasClarasApp activo');
@@ -452,20 +447,25 @@ app.post('/api/auth/recuperar-password', async (req, res) => {
 
         if (errToken) return res.status(400).json({ error: errToken.message });
 
-       
-    const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: correo_electronico,
-        subject: 'Código de recuperación - Cuentas Claras',
-        text: `Tu código de recuperación es: ${tokenAleatorio} . Expira en 15 minutos.`
-    };
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: correo_electronico,
+            subject: 'Código de recuperación - Cuentas Claras',
+            text: `Tu código de recuperación es: ${tokenAleatorio}.\nExpira en 15 minutos.`
+        };
 
-    await transporter.sendMail(mailOptions);
+        // 🌟 CAMBIO: Envolvemos el envío en su propio bloque para capturar errores de SMTP
+        try {
+            const info = await transporter.sendMail(mailOptions);
+            console.log("✅ Correo enviado con éxito:", info.messageId);
+        } catch (mailError) {
+            console.error("❌ Error directo al enviar el correo con Nodemailer:", mailError);
+            return res.status(500).json({ error: "El token se generó, pero falló el envío del correo electrónico." });
+        }
 
-    return res.status(200).json({
-        mensaje: "El código de recuperación ha sido enviado a tu correo electrónico."
-        //  QUITAMOS el 'codigo_simulado' para que sea seguro
-    });
+        return res.status(200).json({
+            mensaje: "El código de recuperación ha sido enviado a tu correo electrónico."
+        });
 
     } catch (error) {
         return res.status(500).json({ error: error.message });
