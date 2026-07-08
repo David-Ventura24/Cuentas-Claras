@@ -127,50 +127,68 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// 1. CONFIGURAR / ACTUALIZAR PRESUPUESTO
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
     
-    const total = parseFloat(cantidad_total);
-    const pct = parseFloat(porcentaje_ahorro || 0);
-    const disponibleTotal = total * (1 - (pct / 100));
-    const ahorroTotal = total * (pct / 100);
+    // totalRecibido es el acumulado que manda la App (ej: 400)
+    const totalRecibido = parseFloat(cantidad_total);
+    const pctNuevo = parseFloat(porcentaje_ahorro || 0);
 
     try {
-        const { data: anterior } = await supabase.from('Presupuesto').select('ahorro, dinero_disponible').eq('id_usuario', usuarioId).maybeSingle();
-        
-        // 🌟 REGLA DE ORO: Si el balance anterior era 0 o negativo, es un ciclo nuevo (reset fecha).
-        // Si aún tenía dinero, mantenemos la fecha para que los gastos se sigan restando.
-        const balancePrevio = anterior ? parseFloat(anterior.dinero_disponible) : 0;
-        const fechaActualizacion = balancePrevio <= 0 ? new Date() : (anterior.updated_at || new Date());
+        // 1. Buscamos qué teníamos antes
+        const { data: ex } = await supabase.from('Presupuesto')
+            .select('*').eq('id_usuario', usuarioId).maybeSingle();
 
+        let montoInyectado = totalRecibido;
+        let ahorroExistente = 0;
+        let disponibleExistente = 0;
+        let fechaActualizacion = new Date();
+
+        if (ex) {
+            // Calculamos cuánto dinero REAL se está inyectando ahora
+            montoInyectado = totalRecibido - parseFloat(ex.cantidad_total);
+            ahorroExistente = parseFloat(ex.ahorro || 0);
+            disponibleExistente = parseFloat(ex.dinero_disponible || 0);
+            
+            //  Si el balance era 0 o negativo, reset de fecha. Si no, mantenemos.
+            fechaActualizacion = disponibleExistente <= 0 ? new Date() : ex.updated_at;
+        }
+
+        // 2. Cálculo Incremental
+        const ahorroDeLaInyeccion = montoInyectado * (pctNuevo / 100);
+        const disponibleDeLaInyeccion = montoInyectado - ahorroDeLaInyeccion;
+
+        const nuevoAhorroTotal = ahorroExistente + ahorroDeLaInyeccion;
+        const nuevoDisponibleTotal = disponibleExistente + disponibleDeLaInyeccion;
+        
+        const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
+
+        // 3. Guardar con la matemática corregida
         const { data: presupuesto, error } = await supabase
             .from('Presupuesto')
             .upsert({
                 id_usuario: usuarioId,
-                cantidad_total: total, // Bruto
-                ahorro: ahorroTotal,
+                cantidad_total: totalRecibido, // Bruto histórico 
+                ahorro: nuevoAhorroTotal,      // Ahorro real sumado
                 periodo: periodo,
-                cantidad_disponible: disponibleTotal,
-                dinero_disponible: disponibleTotal,
-                limite_diario: disponibleTotal / (periodo.toLowerCase() === 'semanal' ? 7 : 30),
-                updated_at: fechaActualizacion 
+                cantidad_disponible: nuevoDisponibleTotal,
+                dinero_disponible: nuevoDisponibleTotal,
+                limite_diario: nuevoDisponibleTotal / dias,
+                updated_at: fechaActualizacion,
+                monto_inicial_real: nuevoDisponibleTotal
             }, { onConflict: 'id_usuario' })
             .select().single();
 
         if (error) throw error;
 
-        // 🌟 REGISTRO EN AHORROS: Calculamos cuánto se acaba de "apartar" nuevo
-        const ahorroPrevio = anterior ? parseFloat(anterior.ahorro) : 0;
-        const incrementoAhorro = ahorroTotal - ahorroPrevio;
-        
-        if (incrementoAhorro > 0) {
+        // 4. Registrar en la tabla de Ahorros el monto real inyectado
+        if (ahorroDeLaInyeccion > 0) {
             await supabase.from('Ahorros').insert([{
                 id_usuario: usuarioId,
-                monto: incrementoAhorro,
+                monto: ahorroDeLaInyeccion,
                 tipo: 'INGRESO',
-                nota: `Ahorro por ajuste/inyección (${periodo})`
+                nota: `Ahorro inyección ${periodo} (${porcentaje_ahorro}%)`
             }]);
         }
 
@@ -199,7 +217,7 @@ app.get('/api/home', verificarToken, async (req, res) => {
         res.json({
             nombre_usuario: usuario?.nombre || "Usuario",
             cantidad_disponible: Math.max(0, balanceReal), 
-            monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0), // 🌟 AHORA MANDA EL BRUTO
+            monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0), //  AHORA MANDA EL BRUTO
             periodo: presupuesto.periodo,
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro)/parseFloat(presupuesto.cantidad_total))*100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
