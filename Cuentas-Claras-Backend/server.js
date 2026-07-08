@@ -246,7 +246,7 @@ app.get('/api/home', verificarToken, async (req, res) => {
             nombre_usuario: usuario?.nombre || "Usuario",
             cantidad_disponible: Math.max(0, balanceReal), 
             // 🌟 CAMBIO: En lugar de mandar el Bruto (200), mandamos el Disponible Inicial (150)
-            monto_total_configurado: disponibleBruto, 
+            monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0),
             periodo: presupuesto.periodo,
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro)/parseFloat(presupuesto.cantidad_total))*100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
