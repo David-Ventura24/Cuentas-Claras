@@ -183,14 +183,15 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
         if (error) throw error;
 
         // 4. Registrar en la tabla de Ahorros el monto real inyectado
-        if (ahorroDeLaInyeccion > 0) {
-            await supabase.from('Ahorros').insert([{
-                id_usuario: usuarioId,
-                monto: ahorroDeLaInyeccion,
-                tipo: 'INGRESO',
-                nota: `Ahorro inyección ${periodo} (${porcentaje_ahorro}%)`
-            }]);
-        }
+        if (diferenciaAhorro > 0) {
+    await supabase.from('Ahorros').insert([{
+        id_usuario: usuarioId,
+        monto: diferenciaAhorro,
+        tipo: 'INGRESO',
+        nota: `Ahorro automático por inyección`,
+        fecha: new Date().toISOString() 
+    }]);
+}
 
         res.json({ mensaje: "OK", presupuesto });
     } catch (error) { res.status(400).json({ error: error.message }); }

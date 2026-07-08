@@ -40,7 +40,11 @@ class SavingsViewModel : ViewModel() {
                             tipo = m.tipo,
                             nota = m.nota,
                             fechaLong = try {
-                                java.time.OffsetDateTime.parse(m.fecha).toInstant().toEpochMilli()
+                                if (m.fecha != null) {
+                                    java.time.OffsetDateTime.parse(m.fecha).toInstant().toEpochMilli()
+                                } else {
+                                    System.currentTimeMillis()
+                                }
                             } catch (e: Exception) {
                                 System.currentTimeMillis()
                             }

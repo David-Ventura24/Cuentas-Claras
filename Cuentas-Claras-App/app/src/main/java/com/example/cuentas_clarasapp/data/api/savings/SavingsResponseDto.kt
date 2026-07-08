@@ -15,5 +15,5 @@ data class AhorroNetDto(
     val monto: Double,
     val tipo: String, // INGRESO o RETIRO
     val nota: String,
-    val fecha: String
+    val fecha: String? = null // 🌟 Hecho opcional para evitar el error de 'null' literal
 )
