@@ -82,21 +82,15 @@ class HomeViewModel(
     ) {
         viewModelScope.launch {
             try {
-                android.util.Log.wtf("HomeVM_DEBUG", "1. UI envía -> Monto: $montoAInyectar, Porcentaje: $nuevoPorcentajeAhorro%")
-
-                val porcentaje = nuevoPorcentajeAhorro / 100f
-                val montoAhorroMeta = (montoAInyectar * porcentaje).toDouble()
-
-                android.util.Log.wtf("HomeVM_DEBUG", "2. Monto de ahorro a registrar: $$montoAhorroMeta")
-
                 val estadoActual = _uiState.value
-                val saldoActual = if (estadoActual is HomeUiState.Success) estadoActual.data.saldoDisponible else 0.0
+                val datos = if (estadoActual is HomeUiState.Success) estadoActual.data else null
 
-                val nuevoMontoTotal = if (saldoActual <= 0) {
+                // Si el balance es 0, empezamos de cero.
+                // Si hay dinero, sumamos el BRUTO anterior (montoInicialConfigurado) para que el ahorro sea exacto.
+                val nuevoMontoTotal = if (datos == null || datos.saldoDisponible <= 0) {
                     montoAInyectar.toDouble()
                 } else {
-                    val brutoAnterior = (estadoActual as HomeUiState.Success).data.montoInicialConfigurado
-                    brutoAnterior + montoAInyectar.toDouble()
+                    datos.montoInicialConfigurado + montoAInyectar.toDouble()
                 }
 
                 val request = com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto(
@@ -105,59 +99,17 @@ class HomeViewModel(
                     porcentajeAhorro = Math.round(nuevoPorcentajeAhorro).toDouble()
                 )
 
-                android.util.Log.wtf("HomeVM_DEBUG", "3. Enviando presupuesto a la API...")
-                val resultadoPresupuesto = budgetRepository.guardarPresupuesto(request)
+                val budgetRepository = com.example.cuentas_clarasapp.data.repositories.BudgetApiRepository()
+                val resultado = budgetRepository.guardarPresupuesto(request)
 
-                if (resultadoPresupuesto.isSuccess) {
-                    android.util.Log.wtf("HomeVM_DEBUG", "4. Presupuesto guardado. Registrando ahorro automático...")
-
-                    // ✅ AHORA SÍ: registrar el ahorro automático si el porcentaje es mayor a 0
-                    if (montoAhorroMeta > 0.0) {
-                        val resultadoAhorro = savingsRepository.guardarAhorro(
-                            monto = montoAhorroMeta,
-                            tipo = "automatico",
-                            nota = "Ahorro automático del ${nuevoPorcentajeAhorro.toInt()}% al inyectar fondos"
-                        )
-
-                        if (resultadoAhorro.isSuccess) {
-                            android.util.Log.wtf("HomeVM_DEBUG", "5. Ahorro de $$montoAhorroMeta registrado correctamente.")
-                        } else {
-                            // El ahorro falló, pero no bloqueamos el flujo — el presupuesto ya se guardó
-                            android.util.Log.e("HomeVM_DEBUG", "5. Ahorro falló: ${resultadoAhorro.exceptionOrNull()?.message}")
-                        }
-                    } else {
-                        android.util.Log.wtf("HomeVM_DEBUG", "5. Porcentaje es 0%, no se registra ahorro.")
-                    }
-
-                    // Refrescar el estado del Home desde la API
-                    val refresh = homeRepository.obtenerDatosHome()
-                    if (refresh.isSuccess) {
-                        val dto = refresh.getOrNull()!!
-                        _uiState.value = HomeUiState.Success(
-                            HomeData(
-                                nombreUsuario = dto.nombre_usuario ?: "Usuario",
-                                saldoDisponible = dto.cantidad_disponible ?: 0.0,
-                                periodoPresupuesto = dto.periodo ?: "Sin configurar",
-                                porcentajeAhorro = dto.porcentaje_ahorro ?: 0,
-                                limiteDiarioSugerido = dto.limite_diario ?: 0.0,
-                                limiteDiarioInicial = dto.limite_diario ?: 0.0,
-                                montoInicialConfigurado = dto.monto_total_configurado ?: 0.0,
-                                gastoDiarioActual = dto.total_gastado_hoy ?: 0.0,
-                                gastosTotalesCiclo = dto.total_gastado_ciclo ?: 0.0,
-                                gastosDelDia = dto.gastos_hoy.map { g ->
-                                    GastoItemHome(g.id.toString(), g.monto, g.categoria, "")
-                                }
-                            )
-                        )
-                        onSuccess()
-                    }
+                if (resultado.isSuccess) {
+                    cargarDatosFinancieros()
+                    onSuccess()
                 } else {
-                    android.util.Log.wtf("HomeVM_DEBUG", "Fallo en endpoint de presupuesto: ${resultadoPresupuesto.exceptionOrNull()?.message}")
-                    onError(resultadoPresupuesto.exceptionOrNull()?.message ?: "Error al guardar presupuesto")
+                    onError(resultado.exceptionOrNull()?.message ?: "Error")
                 }
             } catch (e: Exception) {
-                android.util.Log.wtf("HomeVM_DEBUG", "Excepción general: ${e.message}")
-                onError(e.message ?: "Error de red inesperado")
+                onError(e.message ?: "Error")
             }
         }
     }
