@@ -17,17 +17,12 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,        // Cambiar 465 por 587
-    secure: false,    // Debe ser false para el puerto 587 (usa TLS en su lugar)
+    host: 'smtp.resend.com',
+    port: 465,
+    secure: true,
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        // Obliga a requerir TLS de forma segura y evita problemas de handshake en Railway
-        requireTLS: true,
-        rejectUnauthorized: false 
+        user: 'resend', // Literalmente la palabra 'resend'
+        pass: process.env.RESEND_API_KEY // Tu API key de Resend
     }
 });
 
@@ -449,7 +444,7 @@ app.post('/api/auth/recuperar-password', async (req, res) => {
         if (errToken) return res.status(400).json({ error: errToken.message });
 
         const mailOptions = {
-            from: process.env.EMAIL_USER,
+            from:'onboarding@resend.dev',
             to: correo_electronico,
             subject: 'Código de recuperación - Cuentas Claras',
             text: `Tu código de recuperación es: ${tokenAleatorio}.\nExpira en 15 minutos.`
