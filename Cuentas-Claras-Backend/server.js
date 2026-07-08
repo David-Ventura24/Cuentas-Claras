@@ -37,10 +37,10 @@ const verificarToken = (req, res, next) => {
     try {
         const verificado = jwt.verify(token, process.env.JWT_SECRET);
         req.usuario = verificado;
-        console.log("✅ Token válido para el usuario ID:", verificado.id);
+        console.log(" Token válido para el usuario ID:", verificado.id);
         next();
     } catch (error) {
-        console.log("❌ ERROR 403: Token inválido o expirado.", error.message);
+        console.log(" ERROR 403: Token inválido o expirado.", error.message);
         return res.status(403).json({ error: "Token inválido o expirado" });
     }
 };
@@ -241,7 +241,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.log("🚨 Fallo crítico en Perfil:", error.message);
+        console.log(" Fallo crítico en Perfil:", error.message);
         return res.status(500).json({ error: error.message });
     }
 });
@@ -282,15 +282,15 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
             .single();
 
         if (error) {
-            console.log("❌ Error Supabase:", error.message);
+            console.log(" Error Supabase:", error.message);
             return res.status(400).json({ error: error.message });
         }
 
-        console.log("✅ Presupuesto guardado con éxito");
+        console.log(" Presupuesto guardado con éxito");
         return res.status(200).json({ mensaje: "OK", presupuesto: data });
 
     } catch (error) {
-        console.log("🚨 Error Crítico:", error.message);
+        console.log(" Error Crítico:", error.message);
         return res.status(500).json({ error: error.message });
     }
 });
@@ -384,27 +384,50 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
     }
 });
 
+// MODIFICADO: Ahora incluye la lectura de ahorros correspondientes al mes
 app.get('/api/gastos/historial', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const mesFiltro = parseInt(req.query.mes) || new Date().getMonth() + 1;
     const anioFiltro = parseInt(req.query.anio) || new Date().getFullYear();
 
     try {
-        const { data: gastos, error } = await supabase
+        // 1. Obtener Gastos de Supabase
+        const { data: gastos, error: errGastos } = await supabase
             .from('Gastos')
             .select('*')
             .eq('id_usuario', usuarioId);
 
-        if (error) return res.status(400).json({ error: error.message });
+        if (errGastos) return res.status(400).json({ error: errGastos.message });
 
+        // 2. Obtener Ahorros de Supabase para calcular la tarjeta superior
+        const { data: ahorros, error: errAhorros } = await supabase
+            .from('Ahorros')
+            .select('*')
+            .eq('id_usuario', usuarioId);
+
+        if (errAhorros) return res.status(400).json({ error: errAhorros.message });
+
+        // Filtrar Gastos por mes y año
         const transaccionesFiltradas = (gastos || []).filter(g => {
             if (!g.fecha) return false;
             const partes = g.fecha.split('T')[0].split('-');
             return parseInt(partes[0]) === anioFiltro && parseInt(partes[1]) === mesFiltro;
         });
 
+        // Filtrar Ahorros por mes y año (para que coincida con el mes en pantalla)
+        const ahorrosFiltrados = (ahorros || []).filter(a => {
+            if (!a.fecha) return false;
+            const partes = a.fecha.split('T')[0].split('-');
+            return parseInt(partes[0]) === anioFiltro && parseInt(partes[1]) === mesFiltro;
+        });
+
+        // Calcular sumas totales del mes
         const totalGastadoMes = transaccionesFiltradas.reduce(
             (acc, g) => acc + parseFloat(g.total_gastado || 0), 0
+        );
+
+        const totalAhorradoMes = ahorrosFiltrados.reduce(
+            (acc, a) => acc + parseFloat(a.monto || 0), 0
         );
 
         const transaccionesMapeadas = transaccionesFiltradas.map(g => {
@@ -426,9 +449,13 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
             };
         });
 
+        // NOTA DE CONTROL: Si tu app Android mapea el campo directamente como totalAhorradoMes, 
+        // pasamos ambas variantes para asegurar compatibilidad con tu DTO de Android.
         return res.status(200).json({
             error: null,
-            totalGastadoMes,
+            totalGastadoMes: totalGastadoMes,
+            totalAhorradoMes: totalAhorradoMes, // Nombre explícito para mapeo en Kotlin
+            ahorro_neto: totalAhorradoMes,     // Variante alternativa por si lee este tag
             transacciones: transaccionesMapeadas
         });
 
@@ -468,7 +495,7 @@ app.get('/api/gastos/verificar-cupo', verificarToken, async (req, res) => {
 // ─────────────────────────────────────────
 app.get('/api/ahorros/status', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
-    console.log("--- 💰 PIDIENDO AHORROS para usuario:", usuarioId);
+    console.log("---  PIDIENDO AHORROS para usuario:", usuarioId);
 
     try {
         const { data: movimientos, error } = await supabase
@@ -478,7 +505,7 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
             .order('fecha', { ascending: false });
 
         if (error) {
-            console.log("❌ Error leyendo Ahorros:", error.message);
+            console.log(" Error leyendo Ahorros:", error.message);
             return res.status(400).json({ error: error.message });
         }
 
@@ -494,7 +521,7 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
         });
 
     } catch (error) {
-        console.log("🚨 Error crítico en ahorros/status:", error.message);
+        console.log(" Error crítico en ahorros/status:", error.message);
         return res.status(500).json({ error: error.message });
     }
 });
@@ -524,11 +551,11 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
             .single();
 
         if (error) {
-            console.log("❌ Error insertando ahorro:", error.message);
+            console.log(" Error insertando ahorro:", error.message);
             return res.status(400).json({ error: error.message });
         }
 
-        console.log("✅ Ahorro registrado:", data);
+        console.log(" Ahorro registrado:", data);
         return res.status(201).json({
             mensaje: "Ahorro registrado con éxito",
             ahorro: data
@@ -569,7 +596,7 @@ app.get('/api/grafica', verificarToken, async (req, res) => {
             return {
                 categoria: cat,
                 total_gastado: totalCategoria,
-                porcentaje: parseFloat(porcentaje.toFixed(2))
+                percentage: parseFloat(porcentaje.toFixed(2))
             };
         });
 
