@@ -133,52 +133,55 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// PRESUPUESTO (MATEMÁTICA TRANSACCIONAL CORREGIDA)
+// PRESUPUESTO (LÓGICA LINEAL: BRUTO / AHORRO / DISPONIBLE SEPARADOS)
 // ─────────────────────────────────────────
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
-    console.log("--- 💾 AGREGAR/RECARGAR PRESUPUESTO ---");
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
 
-    const nuevoTotalBruto = parseFloat(cantidad_total);
-    const pctAhorro = parseFloat(porcentaje_ahorro || 0);
-    const montoAhorroNuevo = nuevoTotalBruto * (pctAhorro / 100);
-    const nuevoDisponibleNeto = nuevoTotalBruto - montoAhorroNuevo;
+    const montoIngresado = parseFloat(cantidad_total);
+    const pct = parseFloat(porcentaje_ahorro || 0) / 100;
+
+    if (isNaN(montoIngresado) || !periodo) {
+        return res.status(400).json({ error: "cantidad_total y periodo son obligatorios" });
+    }
+
+    // Cálculos limpios para esta transacción (aislados de cualquier saldo previo)
+    const ahorroDeEsteIngreso = montoIngresado * pct;
+    const disponibleDeEsteIngreso = montoIngresado - ahorroDeEsteIngreso;
 
     try {
-        const { data: presupuestoExistente } = await supabase
+        const { data: existente } = await supabase
             .from('Presupuesto')
             .select('*')
             .eq('id_usuario', usuarioId)
             .maybeSingle();
 
-        let totalAcumulado = nuevoTotalBruto;
-        let ahorroAcumulado = montoAhorroNuevo;
-        let disponibleFinalCalculado = nuevoDisponibleNeto;
+        // Total bruto y ahorro: siempre sumatoria pura de ingresos brutos
+        const totalBrutoAcumulado = existente
+            ? parseFloat(existente.cantidad_total || 0) + montoIngresado
+            : montoIngresado;
 
-        if (presupuestoExistente) {
-            totalAcumulado = parseFloat(presupuestoExistente.cantidad_total || 0) + nuevoTotalBruto;
-            ahorroAcumulado = parseFloat(presupuestoExistente.ahorro || 0) + montoAhorroNuevo;
-            
-            const saldoActualEnBD = parseFloat(presupuestoExistente.dinero_disponible || 0);
-            // Si estaba en cero o negativo, sumamos el neto limpio sobre cero.
-            disponibleFinalCalculado = (saldoActualEnBD < 0 ? 0 : saldoActualEnBD) + nuevoDisponibleNeto;
-        }
+        const ahorroAcumulado = existente
+            ? parseFloat(existente.ahorro || 0) + ahorroDeEsteIngreso
+            : ahorroDeEsteIngreso;
+
+        // Disponible: saldo real actual (ya afectado por gastos previos) + neto de este ingreso
+        const saldoDisponibleActual = existente ? parseFloat(existente.dinero_disponible || 0) : 0;
+        const nuevoSaldoDisponible = saldoDisponibleActual + disponibleDeEsteIngreso;
 
         const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
-        const limiteDiarioCalculado = disponibleFinalCalculado / dias;
 
         const { data, error } = await supabase
             .from('Presupuesto')
             .upsert({
                 id_usuario: usuarioId,
-                cantidad_total: totalAcumulado,
+                cantidad_total: totalBrutoAcumulado,
                 ahorro: ahorroAcumulado,
+                dinero_disponible: nuevoSaldoDisponible,
+                cantidad_disponible: nuevoSaldoDisponible, // se mantiene en coherencia con dinero_disponible
+                limite_diario: nuevoSaldoDisponible / dias,
                 periodo: periodo,
-                cantidad_disponible: disponibleFinalCalculado,
-                dinero_disponible: disponibleFinalCalculado,
-                limite_diario: limiteDiarioCalculado,
-                monto_inicial_real: disponibleFinalCalculado,
                 fecha_inicio: new Date().toISOString()
             }, { onConflict: 'id_usuario' })
             .select()
@@ -218,7 +221,7 @@ app.get('/api/home', verificarToken, async (req, res) => {
 
         const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
         const hoyISO = new Date().toISOString().split('T')[0];
-        
+
         const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
         const totalGastadoHoy = gastosHoy.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
         const totalGastadoCiclo = (todosLosGastos || []).reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
@@ -270,7 +273,7 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
         if (errGasto) return res.status(400).json({ error: errGasto.message });
 
         const { data: presupuesto } = await supabase.from('Presupuesto').select('dinero_disponible').eq('id_usuario', usuarioId).maybeSingle();
-        
+
         if (presupuesto) {
             const nuevoSaldo = parseFloat(presupuesto.dinero_disponible || 0) - montoGasto;
             await supabase
@@ -384,7 +387,7 @@ app.get('/api/grafica', verificarToken, async (req, res) => {
         const total = gastos.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
         const agrupado = {};
         gastos.forEach(g => { agrupado[g.categoria] = (agrupado[g.categoria] || 0) + parseFloat(g.total_gastado); });
-        
+
         const distribucion = Object.keys(agrupado).map(c => ({
             categoria: c,
             total_gastado: agrupado[c],
@@ -402,7 +405,7 @@ app.get('/api/analytics/gastos', verificarToken, async (req, res) => {
         const total = gastos.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
         const agrupado = {};
         gastos.forEach(g => { agrupado[g.categoria] = (agrupado[g.categoria] || 0) + parseFloat(g.total_gastado); });
-        
+
         const categorias = Object.keys(agrupado).map(c => ({
             categoria: c,
             total: agrupado[c],
