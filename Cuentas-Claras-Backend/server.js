@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken'); // Importado arriba de forma limpia
 require('dotenv').config();
+import { Resend } from 'resend';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
