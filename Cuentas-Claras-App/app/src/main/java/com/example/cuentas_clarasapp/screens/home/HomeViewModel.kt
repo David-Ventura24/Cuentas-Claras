@@ -2,6 +2,7 @@ package com.example.cuentas_clarasapp.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto
 import com.example.cuentas_clarasapp.data.repositories.HomeRepository
 import com.example.cuentas_clarasapp.data.repositories.BudgetApiRepository
 import com.example.cuentas_clarasapp.data.repositories.SavingsRepository
@@ -93,8 +94,8 @@ class HomeViewModel(
                     datos.montoInicialConfigurado + montoAInyectar.toDouble()
                 }
 
-                val request = com.example.cuentas_clarasapp.data.api.budget.BudgetRequestDto(
-                    cantidadTotal = nuevoMontoTotal,
+                val request = BudgetRequestDto(
+                    cantidadTotal = montoAInyectar.toDouble(),  // solo el monto nuevo, sin sumar nada aquí
                     periodo = nuevoPeriodo,
                     porcentajeAhorro = Math.round(nuevoPorcentajeAhorro).toDouble()
                 )

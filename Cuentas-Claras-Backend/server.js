@@ -274,7 +274,7 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
 
 
 // PANTALLA DE HISTORIAL (FILTRADO DINÁMICO POR MES Y AÑO) 
-app.get('/api/gastos/historial', verificarToken, async (req, res) => {
+aapp.get('/api/gastos/historial', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     // Android mandará por ejemplo: /api/gastos/historial?mes=5&anio=2026
     const mesFiltro = parseInt(req.query.mes) || new Date().getMonth() + 1;
@@ -287,6 +287,17 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
             .eq('id_usuario', usuarioId);
 
         if (error) return res.status(400).json({ error: error.message });
+
+        // 🌟 NUEVO: traemos los movimientos de Ahorros para calcular el acumulado
+        const { data: movimientosAhorro, error: errorAhorro } = await supabase
+            .from('Ahorros')
+            .select('*')
+            .eq('id_usuario', usuarioId);
+
+        if (errorAhorro) return res.status(400).json({ error: errorAhorro.message });
+
+        const ahorroNeto = (movimientosAhorro || []).reduce((acc, m) =>
+            m.tipo === 'INGRESO' ? acc + parseFloat(m.monto || 0) : acc - parseFloat(m.monto || 0), 0);
 
         // Filtrar en memoria para evitar lidiar con zonas horarias complejas de Postgres de golpe
         const transaccionesFiltradas = gastos.filter(g => {
@@ -323,6 +334,7 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
         return res.status(200).json({
             error: null,
             totalGastadoMes: totalGastadoMes,
+            totalAhorradoMes: ahorroNeto, // 🌟 NUEVO
             transacciones: transaccionesMapeadas
         });
 
@@ -574,6 +586,48 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
     const { data: presupuestos } = await supabase.from('Presupuesto').select('ahorro').eq('id_usuario', usuarioId);
     const totalAhorrado = (presupuestos || []).reduce((acc, p) => acc + parseFloat(p.ahorro || 0), 0);
     res.json({ ahorro_neto: totalAhorrado, movimientos: [] });
+});
+
+// RETIRO DE EMERGENCIA DEL AHORRO GLOBAL
+app.post('/api/ahorros/retiro', verificarToken, async (req, res) => {
+    const usuarioId = req.usuario.id;
+    const { monto, motivo } = req.body;
+
+    const montoRetiro = parseFloat(monto);
+
+    if (!montoRetiro || montoRetiro <= 0) {
+        return res.status(400).json({ error: "El monto del retiro debe ser mayor a cero" });
+    }
+
+    try {
+        // Verificamos que no esté retirando más de lo que tiene ahorrado
+        const { data: movimientos } = await supabase
+            .from('Ahorros')
+            .select('*')
+            .eq('id_usuario', usuarioId);
+
+        const ahorroActual = (movimientos || []).reduce((acc, m) =>
+            m.tipo === 'INGRESO' ? acc + parseFloat(m.monto || 0) : acc - parseFloat(m.monto || 0), 0);
+
+        if (montoRetiro > ahorroActual) {
+            return res.status(400).json({ error: "No puedes retirar más de lo que tienes ahorrado" });
+        }
+
+        const { error } = await supabase.from('Ahorros').insert([{
+            id_usuario: usuarioId,
+            monto: montoRetiro,
+            tipo: 'RETIRO',
+            nota: motivo || 'Retiro de emergencia',
+            fecha: new Date().toISOString()
+        }]);
+
+        if (error) return res.status(400).json({ error: error.message });
+
+        return res.status(200).json({ mensaje: "Retiro registrado con éxito" });
+
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
 // OBTENER DISTRIBUCIÓN PARA GRÁFICAS (ANALYTICS)
