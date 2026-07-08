@@ -588,42 +588,49 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
     res.json({ ahorro_neto: totalAhorrado, movimientos: [] });
 });
 
-// RETIRO DE EMERGENCIA DEL AHORRO GLOBAL
-app.post('/api/ahorros/retiro', verificarToken, async (req, res) => {
+// REGISTRAR MOVIMIENTO DE AHORRO (INGRESO o RETIRO)
+app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
-    const { monto, motivo } = req.body;
+    const { monto, tipo, nota } = req.body;
 
-    const montoRetiro = parseFloat(monto);
+    const montoMovimiento = parseFloat(monto);
+    const tipoMovimiento = (tipo || '').toUpperCase();
 
-    if (!montoRetiro || montoRetiro <= 0) {
-        return res.status(400).json({ error: "El monto del retiro debe ser mayor a cero" });
+    if (!montoMovimiento || montoMovimiento <= 0) {
+        return res.status(400).json({ error: "El monto debe ser mayor a cero" });
+    }
+
+    if (tipoMovimiento !== 'INGRESO' && tipoMovimiento !== 'RETIRO') {
+        return res.status(400).json({ error: "Tipo de movimiento inválido" });
     }
 
     try {
-        // Verificamos que no esté retirando más de lo que tiene ahorrado
-        const { data: movimientos } = await supabase
-            .from('Ahorros')
-            .select('*')
-            .eq('id_usuario', usuarioId);
+        // Si es un retiro, verificamos que no exceda el ahorro neto actual
+        if (tipoMovimiento === 'RETIRO') {
+            const { data: movimientos } = await supabase
+                .from('Ahorros')
+                .select('*')
+                .eq('id_usuario', usuarioId);
 
-        const ahorroActual = (movimientos || []).reduce((acc, m) =>
-            m.tipo === 'INGRESO' ? acc + parseFloat(m.monto || 0) : acc - parseFloat(m.monto || 0), 0);
+            const ahorroActual = (movimientos || []).reduce((acc, m) =>
+                m.tipo === 'INGRESO' ? acc + parseFloat(m.monto || 0) : acc - parseFloat(m.monto || 0), 0);
 
-        if (montoRetiro > ahorroActual) {
-            return res.status(400).json({ error: "No puedes retirar más de lo que tienes ahorrado" });
+            if (montoMovimiento > ahorroActual) {
+                return res.status(400).json({ error: "No puedes retirar más de lo que tienes ahorrado" });
+            }
         }
 
         const { error } = await supabase.from('Ahorros').insert([{
             id_usuario: usuarioId,
-            monto: montoRetiro,
-            tipo: 'RETIRO',
-            nota: motivo || 'Retiro de emergencia',
+            monto: montoMovimiento,
+            tipo: tipoMovimiento,
+            nota: nota || (tipoMovimiento === 'RETIRO' ? 'Retiro de emergencia' : 'Ingreso manual'),
             fecha: new Date().toISOString()
         }]);
 
         if (error) return res.status(400).json({ error: error.message });
 
-        return res.status(200).json({ mensaje: "Retiro registrado con éxito" });
+        return res.status(201).json({ mensaje: "Movimiento registrado con éxito" });
 
     } catch (error) {
         return res.status(500).json({ error: error.message });
