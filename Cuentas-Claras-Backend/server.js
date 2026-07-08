@@ -426,9 +426,17 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
             (acc, g) => acc + parseFloat(g.total_gastado || 0), 0
         );
 
-        const totalAhorradoMes = ahorrosFiltrados.reduce(
-            (acc, a) => acc + parseFloat(a.monto || 0), 0
-        );
+        // CORRECCIÓN AQUÍ: Restar los retiros y sumar los ingresos del mes
+        const totalAhorradoMesNeto = ahorrosFiltrados.reduce((acc, a) => {
+            const montoNumerico = parseFloat(a.monto || 0);
+            const tipoMovimiento = (a.tipo || "").trim().toUpperCase();
+
+            if (tipoMovimiento === 'RETIRO') {
+                return acc - montoNumerico; // Resta el retiro del acumulado del mes
+            } else {
+                return acc + montoNumerico; // Suma los ingresos
+            }
+        }, 0);
 
         const transaccionesMapeadas = transaccionesFiltradas.map(g => {
             let colorHex = "#70777A";
@@ -449,13 +457,11 @@ app.get('/api/gastos/historial', verificarToken, async (req, res) => {
             };
         });
 
-        // NOTA DE CONTROL: Si tu app Android mapea el campo directamente como totalAhorradoMes, 
-        // pasamos ambas variantes para asegurar compatibilidad con tu DTO de Android.
         return res.status(200).json({
             error: null,
             totalGastadoMes: totalGastadoMes,
-            totalAhorradoMes: totalAhorradoMes, // Nombre explícito para mapeo en Kotlin
-            ahorro_neto: totalAhorradoMes,     // Variante alternativa por si lee este tag
+            totalAhorradoMes: totalAhorradoMesNeto, // Enviamos el valor neto corregido
+            ahorro_neto: totalAhorradoMesNeto,      // Enviamos el valor neto corregido
             transacciones: transaccionesMapeadas
         });
 

@@ -208,8 +208,11 @@ fun GlobalSavingsScreen(
 
 @Composable
 private fun MovimientoAhorroRow(movimiento: AhorroEntity) {
-    // CORREGIDO: Ignora mayúsculas/minúsculas para asegurar que el color verde aplique correctamente
-    val esIngreso = movimiento.tipo.equals("INGRESO", ignoreCase = true)
+    // CORREGIDO: Filtro blindado usando el tipo y la palabra clave en la nota
+    val esIngreso = movimiento.tipo.equals("INGRESO", ignoreCase = true) ||
+            movimiento.tipo.equals("automatico", ignoreCase = true) ||
+            movimiento.nota.contains("ahorro", ignoreCase = true)
+
     val colorMonto = if (esIngreso) Color(0xFF4ADE80) else Color(0xFFF87171)
     val prefijo = if (esIngreso) "+ $" else "- $"
 
