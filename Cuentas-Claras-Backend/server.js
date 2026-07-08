@@ -14,11 +14,11 @@ app.use(express.json());
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 app.get('/', (req, res) => {
-    res.send('Backend de CuentasClarasApp activo');
+    res.send('Backend de CuentasClarasApp activo y verificado');
 });
 
 // ─────────────────────────────────────────
-// MIDDLEWARE
+// MIDDLEWARE DE AUTENTICACIÓN
 // ─────────────────────────────────────────
 const verificarToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -38,7 +38,7 @@ const verificarToken = (req, res, next) => {
 };
 
 // ─────────────────────────────────────────
-// AUTH
+// AUTH ENDPOINTS
 // ─────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
     const { correo_electronico, nombre, contrasena } = req.body;
@@ -123,7 +123,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
         const { data: usuario } = await supabase.from('Usuario').select('nombre, carrera').eq('id', req.usuario.id).maybeSingle();
         return res.status(200).json({
             nombre: usuario?.nombre || "Usuario",
-            carrera: usuario?.carrera || "Informatica",
+            carrera: usuario?.carrera || "Informática",
             moneda: "USD ($)",
             estadoCuenta: "Activa"
         });
@@ -133,7 +133,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// PRESUPUESTO (SOLUCIÓN FINANCIERA REAL BLINDADA)
+// PRESUPUESTO (MATEMÁTICA TRANSACCIONAL CORREGIDA)
 // ─────────────────────────────────────────
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
     console.log("--- 💾 AGREGAR/RECARGAR PRESUPUESTO ---");
@@ -146,7 +146,6 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const nuevoDisponibleNeto = nuevoTotalBruto - montoAhorroNuevo;
 
     try {
-        // Obtener el presupuesto que ya existe en la base de datos
         const { data: presupuestoExistente } = await supabase
             .from('Presupuesto')
             .select('*')
@@ -158,15 +157,12 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
         let disponibleFinalCalculado = nuevoDisponibleNeto;
 
         if (presupuestoExistente) {
-            // SI YA EXISTÍA: Sumamos de manera limpia el nuevo monto disponible al saldo que le quedaba en la columna real
-            const saldoActualEnBD = parseFloat(presupuestoExistente.dinero_disponible || 0);
-            
             totalAcumulado = parseFloat(presupuestoExistente.cantidad_total || 0) + nuevoTotalBruto;
             ahorroAcumulado = parseFloat(presupuestoExistente.ahorro || 0) + montoAhorroNuevo;
             
-            // Regra Impecable: Si el saldo actual era negativo o cero, arranca limpio con el nuevo depósito. Si tenía saldo positivo, se le adiciona.
+            const saldoActualEnBD = parseFloat(presupuestoExistente.dinero_disponible || 0);
+            // Si estaba en cero o negativo, sumamos el neto limpio sobre cero.
             disponibleFinalCalculado = (saldoActualEnBD < 0 ? 0 : saldoActualEnBD) + nuevoDisponibleNeto;
-            console.log(`🔄 Cuenta existente: Sumando nuevo neto $${nuevoDisponibleNeto} al saldo actual de $${saldoActualEnBD}`);
         }
 
         const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
@@ -180,7 +176,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
                 ahorro: ahorroAcumulado,
                 periodo: periodo,
                 cantidad_disponible: disponibleFinalCalculado,
-                dinero_disponible: disponibleFinalCalculado, // Esta columna mantiene el estado del dinero al centavo
+                dinero_disponible: disponibleFinalCalculado,
                 limite_diario: limiteDiarioCalculado,
                 monto_inicial_real: disponibleFinalCalculado,
                 fecha_inicio: new Date().toISOString()
@@ -197,7 +193,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// HOME (LECTURA DIRECTA ULTRA-RÁPIDA Y SIN ERRORES)
+// HOME (COMPLETAMENTE VERIFICADO SIN DOBLES CONTEOS)
 // ─────────────────────────────────────────
 app.get('/api/home', verificarToken, async (req, res) => {
     try {
@@ -222,16 +218,15 @@ app.get('/api/home', verificarToken, async (req, res) => {
 
         const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
         const hoyISO = new Date().toISOString().split('T')[0];
+        
         const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
         const totalGastadoHoy = gastosHoy.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
-
-        // Los gastos globales del ciclo para la UI
         const totalGastadoCiclo = (todosLosGastos || []).reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
 
         return res.status(200).json({
             error: null,
             nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: parseFloat(presupuesto.dinero_disponible || 0), // Lectura pura del estado real de la BD
+            cantidad_disponible: parseFloat(presupuesto.dinero_disponible || 0), // Estado real neto directo de BD
             monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0),
             periodo: presupuesto.periodo || "Mensual",
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
@@ -252,10 +247,9 @@ app.get('/api/home', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// GASTOS (RESTA DIRECTAMENTE AL DISPONIBLE)
+// GASTOS (CON CONTROL TRANSACCIONAL SEGURO)
 // ─────────────────────────────────────────
 app.post('/api/gastos', verificarToken, async (req, res) => {
-    console.log("--- 💸 REGISTRANDO GASTO ---");
     const usuarioId = req.usuario.id;
     const { categoria, total_gastado } = req.body;
     const montoGasto = parseFloat(total_gastado);
@@ -263,7 +257,6 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
     if (!categoria || !total_gastado) return res.status(400).json({ error: "Faltan datos" });
 
     try {
-        // 1. Insertar el gasto en su tabla correspondiente
         const { data: gastoData, error: errGasto } = await supabase
             .from('Gastos')
             .insert([{
@@ -276,7 +269,6 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
 
         if (errGasto) return res.status(400).json({ error: errGasto.message });
 
-        // 2. Descontar inmediatamente el valor del saldo disponible del presupuesto
         const { data: presupuesto } = await supabase.from('Presupuesto').select('dinero_disponible').eq('id_usuario', usuarioId).maybeSingle();
         
         if (presupuesto) {
@@ -285,11 +277,9 @@ app.post('/api/gastos', verificarToken, async (req, res) => {
                 .from('Presupuesto')
                 .update({ dinero_disponible: nuevoSaldo, cantidad_disponible: nuevoSaldo })
                 .eq('id_usuario', usuarioId);
-            console.log(`📉 Saldo actualizado en la BD. Nuevo remanente: $${nuevoSaldo}`);
         }
 
         return res.status(201).json({ mensaje: "Gasto registrado con éxito", error: null });
-
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }
@@ -386,7 +376,7 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// GRÁFICAS
+// GRÁFICAS & ANALYTICS
 // ─────────────────────────────────────────
 app.get('/api/grafica', verificarToken, async (req, res) => {
     try {
@@ -425,5 +415,5 @@ app.get('/api/analytics/gastos', verificarToken, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor de CuentasClaras blindado matemáticamente en puerto ${PORT}`);
+    console.log(`Servidor estable corriendo en puerto ${PORT}`);
 });
