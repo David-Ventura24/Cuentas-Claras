@@ -274,7 +274,7 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
 
 
 // PANTALLA DE HISTORIAL (FILTRADO DINÁMICO POR MES Y AÑO) 
-aapp.get('/api/gastos/historial', verificarToken, async (req, res) => {
+app.get('/api/gastos/historial', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     // Android mandará por ejemplo: /api/gastos/historial?mes=5&anio=2026
     const mesFiltro = parseInt(req.query.mes) || new Date().getMonth() + 1;
