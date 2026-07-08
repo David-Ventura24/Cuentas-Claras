@@ -127,48 +127,86 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// CONFIGURAR / ACTUALIZAR PRESUPUESTO 
-// CONFIGURAR PRESUPUESTO (Actualizado para el nuevo esquema)
+// 1. CONFIGURAR / ACTUALIZAR PRESUPUESTO
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const { cantidad_total, periodo, porcentaje_ahorro } = req.body;
+    
     const total = parseFloat(cantidad_total);
     const pct = parseFloat(porcentaje_ahorro || 0);
-
-    const dineroAhorro = total * (pct / 100);
-    const disponibleTotal = total - dineroAhorro;
-    const dias = periodo.toLowerCase() === 'semanal' ? 7 : 30;
-    const limiteDiario = disponibleTotal / dias;
+    const disponibleTotal = total * (1 - (pct / 100));
+    const ahorroTotal = total * (pct / 100);
 
     try {
-        const { data: existente } = await supabase.from('Presupuesto').select('dinero_disponible, updated_at').eq('id_usuario', usuarioId).maybeSingle();
+        const { data: anterior } = await supabase.from('Presupuesto').select('ahorro, dinero_disponible').eq('id_usuario', usuarioId).maybeSingle();
+        
+        // 🌟 REGLA DE ORO: Si el balance anterior era 0 o negativo, es un ciclo nuevo (reset fecha).
+        // Si aún tenía dinero, mantenemos la fecha para que los gastos se sigan restando.
+        const balancePrevio = anterior ? parseFloat(anterior.dinero_disponible) : 0;
+        const fechaActualizacion = balancePrevio <= 0 ? new Date() : (anterior.updated_at || new Date());
 
-
-        // Si el usuario ya no tenía dinero, actualizamos 'updated_at' para empezar ciclo nuevo.
-        // Si aún tenía dinero, mantenemos la fecha anterior para que los gastos viejos se sigan restando.
-        const balanceAnterior = existente ? parseFloat(existente.dinero_disponible) : 0;
-        const nuevaFecha = balanceAnterior <= 0 ? new Date() : existente.updated_at;
-
-        const { data, error } = await supabase
+        const { data: presupuesto, error } = await supabase
             .from('Presupuesto')
             .upsert({
                 id_usuario: usuarioId,
-                cantidad_total: total,
-                ahorro: dineroAhorro,
+                cantidad_total: total, // Bruto
+                ahorro: ahorroTotal,
                 periodo: periodo,
                 cantidad_disponible: disponibleTotal,
                 dinero_disponible: disponibleTotal,
-                limite_diario: limiteDiario,
-                monto_inicial_real: disponibleTotal,
-                updated_at: nuevaFecha //  Mantenemos la fecha si es inyección
+                limite_diario: disponibleTotal / (periodo.toLowerCase() === 'semanal' ? 7 : 30),
+                updated_at: fechaActualizacion 
             }, { onConflict: 'id_usuario' })
             .select().single();
 
-        if (error) return res.status(400).json({ error: error.message });
-        return res.status(200).json({ mensaje: "OK", presupuesto: data });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
+        if (error) throw error;
+
+        // 🌟 REGISTRO EN AHORROS: Calculamos cuánto se acaba de "apartar" nuevo
+        const ahorroPrevio = anterior ? parseFloat(anterior.ahorro) : 0;
+        const incrementoAhorro = ahorroTotal - ahorroPrevio;
+        
+        if (incrementoAhorro > 0) {
+            await supabase.from('Ahorros').insert([{
+                id_usuario: usuarioId,
+                monto: incrementoAhorro,
+                tipo: 'INGRESO',
+                nota: `Ahorro por ajuste/inyección (${periodo})`
+            }]);
+        }
+
+        res.json({ mensaje: "OK", presupuesto });
+    } catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+// 2. PANTALLA HOME (CORREGIDA PARA ENVIAR BRUTOS)
+app.get('/api/home', verificarToken, async (req, res) => {
+    try {
+        const usuarioId = req.usuario.id;
+        const { data: usuario } = await supabase.from('Usuario').select('nombre').eq('id', usuarioId).single();
+        const { data: presupuesto } = await supabase.from('Presupuesto').select('*').eq('id_usuario', usuarioId).maybeSingle();
+
+        if (!presupuesto) return res.status(200).json({ nombre_usuario: usuario?.nombre || "Usuario", cantidad_disponible: 0, gastos_hoy: [] });
+
+        const fechaRef = new Date(presupuesto.updated_at).getTime();
+        const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
+        
+        const gastosCiclo = (todosLosGastos || []).filter(g => new Date(g.fecha).getTime() >= fechaRef);
+        const totalGastadoCiclo = gastosCiclo.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
+        
+        const disponibleBruto = parseFloat(presupuesto.cantidad_disponible || 0);
+        const balanceReal = disponibleBruto - totalGastadoCiclo;
+
+        res.json({
+            nombre_usuario: usuario?.nombre || "Usuario",
+            cantidad_disponible: Math.max(0, balanceReal), 
+            monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0), // 🌟 AHORA MANDA EL BRUTO
+            periodo: presupuesto.periodo,
+            porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro)/parseFloat(presupuesto.cantidad_total))*100),
+            limite_diario: parseFloat(presupuesto.limite_diario || 0),
+            total_gastado_hoy: (todosLosGastos || []).filter(g => g.fecha.startsWith(new Date().toISOString().split('T')[0])).reduce((acc,g)=> acc + parseFloat(g.total_gastado), 0),
+            gastos_hoy: gastosCiclo.map(g => ({ id: g.id, categoria: g.categoria, monto: g.total_gastado, fecha: g.fecha }))
+        });
+    } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 // OBTENER STATUS DE AHORROS (Para la pantalla Savings)
@@ -185,58 +223,8 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// Pantalla home
-app.get('/api/home', verificarToken, async (req, res) => {
-    try {
-        const usuarioId = req.usuario.id;
-        const { data: usuario } = await supabase.from('Usuario').select('nombre').eq('id', usuarioId).single();
-        const { data: presupuesto } = await supabase.from('Presupuesto').select('*').eq('id_usuario', usuarioId).maybeSingle();
 
-        if (!presupuesto) {
-            return res.status(200).json({ nombre_usuario: usuario?.nombre || "Usuario", cantidad_disponible: 0, gastos_hoy: [] });
-        }
 
-        // 🌟 CORRECCIÓN RADICAL: Forzamos la comparación a milisegundos para que no haya error
-        const fechaReferencia = new Date(presupuesto.updated_at || presupuesto.created_at).getTime();
-
-        const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
-        
-        // Filtramos manualmente en el servidor para que sea 100% exacto
-        const gastosCiclo = (todosLosGastos || []).filter(g => {
-            const fechaGasto = new Date(g.fecha).getTime();
-            return fechaGasto >= fechaReferencia; // Solo gastos DESPUÉS del presupuesto
-        });
-
-        const totalGastadoCiclo = gastosCiclo.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0);
-        const montoBase = parseFloat(presupuesto.cantidad_disponible || 0);
-        const saldoReal = montoBase - totalGastadoCiclo;
-
-        // LOG PARA TI: Mira esto en la terminal de Visual Studio
-        console.log(`--- CÁLCULO DE BALANCE ---`);
-        console.log(`Monto Inicial: ${montoBase}`);
-        console.log(`Gastos encontrados después del presupuesto: ${gastosCiclo.length}`);
-        console.log(`Total Restado: ${totalGastadoCiclo}`);
-        console.log(`Resultado Final: ${saldoReal}`);
-
-        const hoyISO = new Date().toISOString().split('T')[0];
-        const gastosHoy = (todosLosGastos || []).filter(g => (g.fecha || "").startsWith(hoyISO));
-
-        return res.status(200).json({
-            error: null,
-            nombre_usuario: usuario?.nombre || "Usuario",
-            cantidad_disponible: Math.max(0, saldoReal), 
-            monto_total_configurado: montoBase, 
-            periodo: presupuesto.periodo || "Mensual",
-            porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro || 0) / parseFloat(presupuesto.cantidad_total || 1)) * 100),
-            limite_diario: parseFloat(presupuesto.limite_diario || 0),
-            total_gastado_hoy: gastosHoy.reduce((acc, g) => acc + parseFloat(g.total_gastado || 0), 0),
-            total_gastado_ciclo: totalGastadoCiclo,
-            gastos_hoy: gastosHoy.map(g => ({ id: g.id, categoria: g.categoria, monto: g.total_gastado, fecha: g.fecha }))
-        });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
-});
 
 // PANTALLA DE HISTORIAL (FILTRADO DINÁMICO POR MES Y AÑO) 
 app.get('/api/gastos/historial', verificarToken, async (req, res) => {
