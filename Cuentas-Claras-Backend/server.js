@@ -247,7 +247,7 @@ app.get('/api/usuario/perfil', verificarToken, async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// PRESUPUESTO
+// PRESUPUESTO 
 // ─────────────────────────────────────────
 app.post('/api/presupuestos', verificarToken, async (req, res) => {
     console.log("--- 💾 PROCESANDO PRESUPUESTO BLINDADO ---");
@@ -262,15 +262,15 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
     const limiteDiarioCalculado = dineroDisponibleTotal / dias;
 
     try {
-        // Consultar si ya existe un registro para preservar la fecha original de creación del ciclo
+        // Consultar si ya existe un registro para preservar la fecha original de inicio del ciclo
         const { data: presupuestoExistente } = await supabase
             .from('Presupuesto')
-            .select('created_at, fecha_inicio')
+            .select('fecha_inicio')
             .eq('id_usuario', usuarioId)
             .maybeSingle();
 
+        // Si ya existe, dejamos la fecha que tenía. Si es nuevo, creamos una hoy.
         const fechaInicioOriginal = presupuestoExistente?.fecha_inicio || new Date().toISOString();
-        const fechaCreatedOriginal = presupuestoExistente?.created_at || new Date().toISOString();
 
         const { data, error } = await supabase
             .from('Presupuesto')
@@ -283,9 +283,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
                 dinero_disponible: dineroDisponibleTotal,
                 limite_diario: limiteDiarioCalculado,
                 monto_inicial_real: dineroDisponibleTotal,
-                fecha_inicio: fechaInicioOriginal, // BLINDAJE: Conserva el inicio del ciclo activo
-                created_at: fechaCreatedOriginal,
-                updated_at: fechaCreatedOriginal   // BLINDAJE: Evita que se mueva la referencia de los gastos pasados
+                fecha_inicio: fechaInicioOriginal // BLINDAJE REAL: No altera el ciclo de gastos actual
             }, { onConflict: 'id_usuario' })
             .select()
             .single();
@@ -295,7 +293,7 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
 
-        console.log(" Presupuesto guardado y blindado con éxito");
+        console.log(" Presupuesto guardado con éxito");
         return res.status(200).json({ mensaje: "OK", presupuesto: data });
 
     } catch (error) {
@@ -303,7 +301,6 @@ app.post('/api/presupuestos', verificarToken, async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
-
 // ─────────────────────────────────────────
 // HOME
 // ─────────────────────────────────────────
@@ -328,8 +325,8 @@ app.get('/api/home', verificarToken, async (req, res) => {
             });
         }
 
-        // BLINDAJE: Usamos la fecha original del ciclo para que ningún gasto previo desaparezca
-        const fechaReferencia = new Date(presupuesto.fecha_inicio || presupuesto.created_at).getTime();
+       // BLINDAJE REAL: Usamos únicamente fecha_inicio que sí existe en la tabla Presupuesto
+        const fechaReferencia = presupuesto.fecha_inicio ? new Date(presupuesto.fecha_inicio).getTime() : 0;
         const { data: todosLosGastos } = await supabase.from('Gastos').select('*').eq('id_usuario', usuarioId);
 
         const gastosCiclo = (todosLosGastos || []).filter(g => {
