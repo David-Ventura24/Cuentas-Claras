@@ -55,9 +55,20 @@ fun MainNavigation() {
         composable<Routes.Login> {
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Routes.Register) },
-                onNavigateToForgotPassword = { /* TODO: Implementar si tienes la ruta */ },
+                onNavigateToForgotPassword = { navController.navigate(Routes.ForgotPassword) },
                 onLoginSuccess = {
                     navController.navigate(Routes.Home) { popUpTo(Routes.Login) { inclusive = true } }
+                }
+            )
+        }
+
+        composable<Routes.ForgotPassword> {
+            com.example.cuentas_clarasapp.screens.auth.ForgotPasswordScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onSuccess = {
+                    navController.navigate(Routes.Login) {
+                        popUpTo(Routes.ForgotPassword) { inclusive = true }
+                    }
                 }
             )
         }
@@ -66,7 +77,7 @@ fun MainNavigation() {
             RegisterScreen(
                 onNavigateToLogin = { navController.popBackStack() },
                 onRegisterSuccess = {
-                    navController.navigate(Routes.Home) { popUpTo(Routes.Register) { inclusive = true } }
+                    navController.navigate(Routes.Login) { popUpTo(Routes.Register) { inclusive = true } }
                 }
             )
         }

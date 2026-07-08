@@ -14,6 +14,16 @@ app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS  
+    }
+});
+
 app.get('/', (req, res) => {
     res.send('Backend de CuentasClarasApp activo');
 });
@@ -218,7 +228,8 @@ app.get('/api/home', verificarToken, async (req, res) => {
         res.json({
             nombre_usuario: usuario?.nombre || "Usuario",
             cantidad_disponible: Math.max(0, balanceReal), 
-            monto_total_configurado: parseFloat(presupuesto.cantidad_total || 0), //  AHORA MANDA EL BRUTO
+            // 🌟 CAMBIO: En lugar de mandar el Bruto (200), mandamos el Disponible Inicial (150)
+            monto_total_configurado: disponibleBruto, 
             periodo: presupuesto.periodo,
             porcentaje_ahorro: Math.round((parseFloat(presupuesto.ahorro)/parseFloat(presupuesto.cantidad_total))*100),
             limite_diario: parseFloat(presupuesto.limite_diario || 0),
@@ -428,10 +439,20 @@ app.post('/api/auth/recuperar-password', async (req, res) => {
 
         if (errToken) return res.status(400).json({ error: errToken.message });
 
-        return res.status(200).json({
-            mensaje: "Código de recuperación generado con éxito (Simulación)",
-            codigo_simulado: tokenAleatorio
-        });
+       
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: correo_electronico,
+        subject: 'Código de recuperación - Cuentas Claras',
+        text: `Tu código de recuperación es: ${tokenAleatorio} . Expira en 15 minutos.`
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    return res.status(200).json({
+        mensaje: "El código de recuperación ha sido enviado a tu correo electrónico."
+        //  QUITAMOS el 'codigo_simulado' para que sea seguro
+    });
 
     } catch (error) {
         return res.status(500).json({ error: error.message });
@@ -495,6 +516,7 @@ app.post('/api/auth/restablecer-password', async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 });
+
 
 // OBTENER PERFIL DEL USUARIO
 app.get('/api/usuario/perfil', verificarToken, async (req, res) => {

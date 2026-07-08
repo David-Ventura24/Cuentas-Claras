@@ -7,10 +7,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +28,7 @@ private val BgDark     = Color(0xFF111013)
 private val BgCard     = Color(0xFF1A1820)
 private val TextDim    = Color(0x66FFFFFF)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen(
     navController : NavController,
@@ -38,8 +38,20 @@ fun AnalyticsScreen(
     // Escucha reactiva del StateFlow bajo el ciclo de vida de la UI
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    //  Contenedor raíz limpio para evitar conflictos de layouts y permitir el scroll correcto
-    Box(
+    //  PullToRefreshBox permite recargar arrastrando hacia abajo con ruedita morada
+    PullToRefreshBox(
+        isRefreshing = uiState is AnalyticsUiState.Loading,
+        onRefresh = { viewModel.refrescarContenido() },
+        contentAlignment = Alignment.TopCenter,
+        indicator = {
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                state = rememberPullToRefreshState(),
+                isRefreshing = uiState is AnalyticsUiState.Loading,
+                containerColor = BgCard,
+                color = Purple, //  Ruedita morada
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        },
         modifier = Modifier
             .fillMaxSize()
             .background(BgDark)
@@ -47,15 +59,17 @@ fun AnalyticsScreen(
     ) {
         when (val state = uiState) {
             is AnalyticsUiState.Loading -> {
-                CircularProgressIndicator(
-                    color = Purple,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                // Si no hay datos previos, mostramos carga central
+                if (uiState !is AnalyticsUiState.Success) {
+                    CircularProgressIndicator(
+                        color = Purple,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
             }
             is AnalyticsUiState.Success -> {
                 AnalyticsContent(
-                    data = state.data,
-                    viewModel = viewModel
+                    data = state.data
                 )
             }
             is AnalyticsUiState.Error -> {
@@ -76,14 +90,13 @@ fun AnalyticsScreen(
 
 @Composable
 private fun AnalyticsContent(
-    data: ExpenseAnalyticsData,
-    viewModel: AnalyticsViewModel
+    data: ExpenseAnalyticsData
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState()) // El scroll ahora responderá de forma nativa sin interrupciones
+            .verticalScroll(rememberScrollState())
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -97,25 +110,18 @@ private fun AnalyticsContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Selector de Fecha
-        Row(
+        //  Título de la gráfica (Sustituye al selector de fecha anterior)
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+            contentAlignment = Alignment.Center
         ) {
-            IconButton(onClick = { viewModel.cambiarMes(avanzar = false) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Mes anterior", tint = Purple)
-            }
             Text(
-                text = data.mesAnioFiltro,
+                text = "Grafica de gastos",
                 color = Color.White,
-                fontSize = 16.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(vertical = 8.dp)
             )
-            IconButton(onClick = { viewModel.cambiarMes(avanzar = true) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Mes siguiente", tint = Purple)
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -179,8 +185,6 @@ private fun AnalyticsContent(
             }
         }
 
-        //  Espaciador inferior clave para que los últimos elementos queden totalmente visibles
-        // por encima de tu barra de pestañas flotante.
         Spacer(modifier = Modifier.height(110.dp))
     }
 }
@@ -191,7 +195,6 @@ private fun CategoriaGastoRow(categoria: CategoriaGastoData) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Círculo de color identificador de la categoría
         Box(
             modifier = Modifier
                 .size(10.dp)
@@ -201,7 +204,6 @@ private fun CategoriaGastoRow(categoria: CategoriaGastoData) {
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Etiqueta del nombre
         Text(
             text = categoria.nombre,
             color = Color.White,
@@ -210,7 +212,6 @@ private fun CategoriaGastoRow(categoria: CategoriaGastoData) {
             modifier = Modifier.weight(1f)
         )
 
-        // Metrica porcentual
         Text(
             text = "${"%.1f".format(categoria.porcentaje)}%",
             color = TextDim,
@@ -218,7 +219,6 @@ private fun CategoriaGastoRow(categoria: CategoriaGastoData) {
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        // Saldo absoluto por categoría
         Text(
             text = "$${"%.2f".format(categoria.monto)}",
             color = Color.White,

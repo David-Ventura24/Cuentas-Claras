@@ -41,25 +41,33 @@ class AuthApiRepository(context: Context) {
             }
 
             val result: AuthResponseDto = response.body()
-
-            if (result.error == null && result.token != null && result.usuario?.id != null) {
-                sessionManager.guardarSesion(token = result.token, userId = result.usuario.id)
-            }
             result
         } catch (e: Exception) {
             AuthResponseDto(error = e.localizedMessage ?: "Error de conexión")
         }
     }
 
-    suspend fun recuperarPassword(correo: String): AuthResponseDto {
+    suspend fun solicitarRecuperacion(correo: String): com.example.cuentas_clarasapp.data.api.auth.ForgotPasswordResponse {
         return try {
             val response = ApiClient.client.post("auth/recuperar-password") {
                 contentType(ContentType.Application.Json)
-                setBody(mapOf("correo_electronico" to correo))
+                setBody(com.example.cuentas_clarasapp.data.api.auth.ForgotPasswordRequest(correo))
             }
             response.body()
         } catch (e: Exception) {
-            AuthResponseDto(error = e.localizedMessage ?: "Error de conexión")
+            com.example.cuentas_clarasapp.data.api.auth.ForgotPasswordResponse(error = e.localizedMessage)
+        }
+    }
+
+    suspend fun restablecerPassword(request: com.example.cuentas_clarasapp.data.api.auth.ResetPasswordRequest): com.example.cuentas_clarasapp.data.api.auth.ForgotPasswordResponse {
+        return try {
+            val response = ApiClient.client.post("auth/restablecer-password") {
+                contentType(ContentType.Application.Json)
+                setBody(request)
+            }
+            response.body()
+        } catch (e: Exception) {
+            com.example.cuentas_clarasapp.data.api.auth.ForgotPasswordResponse(error = e.localizedMessage)
         }
     }
 }

@@ -14,6 +14,9 @@ sealed class Routes {
     data object Register : Routes()
 
     @Serializable
+    data object ForgotPassword : Routes()
+
+    @Serializable
     data object Home : Routes()
 
     @Serializable
