@@ -509,13 +509,22 @@ app.get('/api/ahorros/status', verificarToken, async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
 
-        const totalAcumulado = (movimientos || []).reduce(
-            (acc, m) => acc + parseFloat(m.monto || 0), 0
-        );
+        // CORRECCIÓN: Restar si es RETIRO, sumar si es INGRESO (ignorando mayúsculas/minúsculas)
+        const totalAcumulado = (movimientos || []).reduce((acc, m) => {
+            const montoNumerico = parseFloat(m.monto || 0);
+            const tipoMovimiento = (m.tipo || "").trim().toUpperCase();
 
-        console.log("✅ Total ahorrado:", totalAcumulado, "| Movimientos:", movimientos?.length);
+            if (tipoMovimiento === 'RETIRO') {
+                return acc - montoNumerico; // Resta los retiros del balance global
+            } else {
+                return acc + montoNumerico; // Suma los ingresos/ahorros automáticos
+            }
+        }, 0);
+
+        console.log("✅ Total neto calculado:", totalAcumulado, "| Movimientos:", movimientos?.length);
 
         return res.status(200).json({
+            // Enviamos el cálculo neto real de la matemática
             ahorro_neto: totalAcumulado,
             movimientos: movimientos || []
         });
@@ -530,20 +539,23 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
     const usuarioId = req.usuario.id;
     const { monto, tipo, nota } = req.body;
 
-    console.log("--- 💾 REGISTRANDO AHORRO ---");
-    console.log("Monto:", monto, "| Tipo:", tipo, "| Nota:", nota);
+    console.log("--- 💾 REGISTRANDO MOVIMIENTO DE AHORRO ---");
+    console.log("Monto:", monto, "| Tipo recibido:", tipo, "| Nota:", nota);
 
     if (!monto || parseFloat(monto) <= 0) {
         return res.status(400).json({ error: "El monto debe ser mayor a 0" });
     }
 
     try {
+        // CORRECCIÓN: Si no viene tipo, asumimos 'INGRESO'. Forzamos mayúsculas para mantener consistencia limpia.
+        const tipoEstandarizado = (tipo || 'INGRESO').trim().toUpperCase();
+
         const { data, error } = await supabase
             .from('Ahorros')
             .insert([{
                 id_usuario: usuarioId,
                 monto: parseFloat(monto),
-                tipo: tipo || 'automatico',
+                tipo: tipoEstandarizado, // Guardar ingreso o retiro de forma limpia
                 nota: nota || '',
                 fecha: new Date().toISOString()
             }])
@@ -555,9 +567,9 @@ app.post('/api/ahorros/movimiento', verificarToken, async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
 
-        console.log(" Ahorro registrado:", data);
+        console.log(" Movimiento de ahorro registrado:", data);
         return res.status(201).json({
-            mensaje: "Ahorro registrado con éxito",
+            mensaje: "Movimiento de ahorro registrado con éxito",
             ahorro: data
         });
 

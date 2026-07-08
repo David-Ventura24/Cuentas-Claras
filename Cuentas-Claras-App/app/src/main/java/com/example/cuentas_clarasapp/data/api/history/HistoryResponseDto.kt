@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 data class HistoryResponseDto(
     val error: String? = null,
     val totalGastadoMes: Double,
+    val totalAhorradoMes: Double? = 0.0,
+    val ahorro_neto: Double? = 0.0,
     val transacciones: List<TransaccionDto>
 )
 

@@ -15,6 +15,9 @@ class SavingsViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<SavingsUiState>(SavingsUiState.Loading)
     val uiState: StateFlow<SavingsUiState> = _uiState.asStateFlow()
 
+    // Instancia única del repositorio para reutilizarla
+    private val repository = SavingsRepository()
+
     init {
         cargarAhorros()
     }
@@ -27,7 +30,6 @@ class SavingsViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = SavingsUiState.Loading
             try {
-                val repository = SavingsRepository()
                 val resultado = repository.obtenerStatusAhorro()
 
                 if (resultado.isSuccess) {
@@ -59,6 +61,24 @@ class SavingsViewModel : ViewModel() {
     }
 
     fun realizarRetiroEmergencia(monto: Double, motivo: String) {
-        // TODO
+        viewModelScope.launch {
+            // Pasamos temporalmente a Loading mientras se procesa la transacción en red
+            _uiState.value = SavingsUiState.Loading
+            try {
+                // NOTA: Asegúrate de que tu SavingsRepository implemente esta función llamando a tu endpoint de Node.js
+                // Ej: Un POST a /api/ahorros/retiro mandando un objeto o los parámetros de monto y motivo.
+                val resultado = repository.registrarRetiroEmergencia(monto, motivo)
+
+                if (resultado.isSuccess) {
+                    // Si el servidor acepta el retiro, recargamos los datos para ver el nuevo balance neto descender
+                    cargarAhorros()
+                } else {
+                    val err = resultado.exceptionOrNull()?.message ?: "No se pudo procesar el retiro"
+                    _uiState.value = SavingsUiState.Error(err)
+                }
+            } catch (e: Exception) {
+                _uiState.value = SavingsUiState.Error("Error al retirar: ${e.message}")
+            }
+        }
     }
 }

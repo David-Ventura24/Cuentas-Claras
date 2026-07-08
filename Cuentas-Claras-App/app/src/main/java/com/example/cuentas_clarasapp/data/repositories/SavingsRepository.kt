@@ -41,4 +41,26 @@ class SavingsRepository {
             Result.failure(e)
         }
     }
+
+    // NUEVO MÉTODO: Conecta directamente el retiro de emergencia con la API
+    suspend fun registrarRetiroEmergencia(monto: Double, motivo: String): Result<Unit> {
+        return try {
+            val token = ApiClient.obtenerTokenActual()
+
+            // Reutilizamos tu endpoint 'ahorros/movimiento' mandando explícitamente "RETIRO"
+            val response = ApiClient.client.post("ahorros/movimiento") {
+                header(HttpHeaders.Authorization, "Bearer $token")
+                contentType(ContentType.Application.Json)
+                setBody(SavingRequestDto(monto = monto, tipo = "RETIRO", nota = motivo))
+            }
+
+            if (response.status == HttpStatusCode.Created || response.status == HttpStatusCode.OK) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Error en el servidor al retirar: ${response.status}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

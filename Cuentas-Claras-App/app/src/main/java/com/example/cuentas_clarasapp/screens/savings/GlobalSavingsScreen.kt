@@ -37,7 +37,7 @@ fun GlobalSavingsScreen(
     navController: NavController,
     viewModel: SavingsViewModel
 ) {
-    //  Sincronizar datos al entrar
+    // Sincronizar datos al entrar a la pantalla
     androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
         viewModel.refrescarAhorros()
         onPauseOrDispose { }
@@ -127,7 +127,16 @@ fun GlobalSavingsScreen(
                     }
                 }
                 is SavingsUiState.Error -> {
-                    Text(text = state.mensaje, color = Color.Red, modifier = Modifier.align(Alignment.Center))
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(text = state.mensaje, color = Color.Red, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(onClick = { viewModel.refrescarAhorros() }) {
+                            Text("Reintentar")
+                        }
+                    }
                 }
             }
         }
@@ -199,7 +208,8 @@ fun GlobalSavingsScreen(
 
 @Composable
 private fun MovimientoAhorroRow(movimiento: AhorroEntity) {
-    val esIngreso = movimiento.tipo == "INGRESO"
+    // CORREGIDO: Ignora mayúsculas/minúsculas para asegurar que el color verde aplique correctamente
+    val esIngreso = movimiento.tipo.equals("INGRESO", ignoreCase = true)
     val colorMonto = if (esIngreso) Color(0xFF4ADE80) else Color(0xFFF87171)
     val prefijo = if (esIngreso) "+ $" else "- $"
 

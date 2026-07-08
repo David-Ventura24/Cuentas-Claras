@@ -65,10 +65,12 @@ class HistoryViewModel(
                         )
                     }
 
+                    // MODIFICADO: Ahora pasamos activamente totalAhorradoMes al estado de la UI
                     _uiState.value = HistoryUiState.Success(
                         data = HistoryData(
                             mesAnioFiltro = textoFiltro,
                             totalGastadoMes = dto.totalGastadoMes,
+                            totalAhorradoMes = dto.totalAhorradoMes ?: dto.ahorro_neto ?: 0.0,
                             transacciones = transacciones
                         )
                     )
