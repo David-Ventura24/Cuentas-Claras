@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Ignorar carpetas build en cualquier subcarpeta
+**/build/
